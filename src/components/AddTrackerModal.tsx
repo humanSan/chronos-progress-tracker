@@ -1,0 +1,175 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X } from 'lucide-react';
+import { format } from 'date-fns';
+import { Tracker, TrackerType } from '../types';
+
+interface AddTrackerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (tracker: Tracker) => void;
+  editingTracker?: Tracker | null;
+}
+
+export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClose, onAdd, editingTracker }) => {
+  const [name, setName] = useState(editingTracker?.name || '');
+  const [type, setType] = useState<TrackerType>(editingTracker?.type || 'day');
+  const [startDate, setStartDate] = useState(editingTracker?.startDate ? format(new Date(editingTracker.startDate), 'yyyy-MM-dd') : '');
+  const [endDate, setEndDate] = useState(editingTracker?.endDate ? format(new Date(editingTracker.endDate), 'yyyy-MM-dd') : '');
+  const [color, setColor] = useState(editingTracker?.color || '#A3E635');
+  const [precision, setPrecision] = useState(editingTracker?.precision || 2);
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(editingTracker?.name || '');
+      setType(editingTracker?.type || 'day');
+      setStartDate(editingTracker?.startDate ? format(new Date(editingTracker.startDate), 'yyyy-MM-dd') : '');
+      setEndDate(editingTracker?.endDate ? format(new Date(editingTracker.endDate), 'yyyy-MM-dd') : '');
+      setColor(editingTracker?.color || '#A3E635');
+      setPrecision(editingTracker?.precision || 2);
+    }
+  }, [isOpen, editingTracker]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onAdd({
+      id: editingTracker?.id || Math.random().toString(36).substr(2, 9),
+      name: name || type.toUpperCase(),
+      type,
+      startDate: type === 'custom' ? new Date(startDate + 'T00:00:00').toISOString() : undefined,
+      endDate: type === 'custom' ? new Date(endDate + 'T23:59:59').toISOString() : undefined,
+      color,
+      precision,
+      createdAt: editingTracker?.createdAt || Date.now()
+    });
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="relative w-full max-w-md bg-[#1A1A1A] border border-white/10 rounded-[2.5rem] p-8 shadow-2xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-bold text-white">
+                {editingTracker ? 'Edit Tracker' : 'New Tracker'}
+              </h2>
+              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white/40">
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Name (Optional)</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. My Project"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent1)] transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Interval</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['day', 'week', 'month', 'year', 'custom'] as TrackerType[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setType(t)}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        type === t 
+                          ? 'bg-[var(--accent1)] text-black' 
+                          : 'bg-white/5 text-white/60 hover:bg-white/10'
+                      }`}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {type === 'custom' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Start Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent1)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">End Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent1)]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Color</label>
+                  <div className="flex gap-3">
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="w-12 h-12 bg-transparent border-none cursor-pointer shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={color}
+                      onChange={(e) => setColor(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-mono focus:outline-none focus:border-[var(--accent1)]"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Precision</label>
+                  <select
+                    value={precision}
+                    onChange={(e) => setPrecision(parseInt(e.target.value))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[var(--accent1)]"
+                  >
+                    {[0, 1, 2, 3, 4].map(p => (
+                      <option key={p} value={p} className="bg-[#1A1A1A]">{p} digits</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold py-4 rounded-2xl transition-all transform active:scale-[0.98] mt-4"
+              >
+                {editingTracker ? 'Save Changes' : 'Create Tracker'}
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};

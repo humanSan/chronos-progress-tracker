@@ -1,0 +1,5 @@
+{
+  "name": "Chronos Progress Tracker",
+  "description": "A visual widget screen for tracking time intervals, from daily progress to custom life milestones.",
+  "requestFramePermissions": []
+}
