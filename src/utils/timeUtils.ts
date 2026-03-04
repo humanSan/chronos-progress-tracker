@@ -87,3 +87,21 @@ export function getOrdinal(n: number) {
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
+
+export function timeToPercentage(time: string): number | undefined {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return undefined;
+  const hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  if (hours < 0 || hours >= 24 || minutes < 0 || minutes >= 60) return undefined;
+  return parseFloat(((hours * 60 + minutes) / (24 * 60) * 100).toFixed(2));
+}
+
+export function percentageToTime(percentage: number): string | undefined {
+  if (percentage < 0 || percentage > 100) return undefined;
+  let totalMinutes = Math.round((percentage / 100) * 24 * 60);
+  if (totalMinutes >= 1440) totalMinutes = 1439;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}

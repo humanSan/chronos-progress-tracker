@@ -16,6 +16,21 @@ export interface Theme {
   accent2: string; // Secondary accent (e.g. #67E8F9)
 }
 
+export interface Todo {
+  id: string;
+  text: string;
+  completed: boolean;
+  timeGoal?: string; // e.g. "12:00"
+  percentageGoal?: number; // e.g. 50
+  createdAt: number;
+  trackingStartedAt?: number; // Timestamp when tracking started
+}
+
+export interface DayTodos {
+  date: string; // ISO date string (YYYY-MM-DD)
+  todos: Todo[];
+}
+
 export interface ProgressData {
   percentage: number;
   timeLeft: string;

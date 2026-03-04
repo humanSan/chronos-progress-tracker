@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Clock, LayoutGrid, List, Maximize2, Minimize2, Palette } from 'lucide-react';
-import { Tracker, Theme } from './types';
+import { Tracker, Theme, DayTodos, Todo } from './types';
 import { TrackerCard } from './components/TrackerCard';
 import { AddTrackerModal } from './components/AddTrackerModal';
 import { ThemeSettingsModal } from './components/ThemeSettingsModal';
+import { Sidebar } from './components/Sidebar';
+import { TodoView } from './components/TodoView';
+import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 
 const DEFAULT_TRACKERS: Tracker[] = [
   {
@@ -39,6 +42,14 @@ export default function App() {
     const saved = localStorage.getItem('chronos-theme');
     return saved ? JSON.parse(saved) : { accent1: '#A3E635', accent2: '#67E8F9' };
   });
+  const [activeView, setActiveView] = useState<'trackers' | 'todos'>('trackers');
+  const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
+    const saved = localStorage.getItem('chronos-todos');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [activeTodoId, setActiveTodoId] = useState<string | null>(() => {
+    return localStorage.getItem('chronos-active-todo');
+  });
 
   useEffect(() => {
     localStorage.setItem('chronos-theme', JSON.stringify(theme));
@@ -60,6 +71,18 @@ export default function App() {
     localStorage.setItem('chronos-trackers', JSON.stringify(trackers));
   }, [trackers]);
 
+  useEffect(() => {
+    localStorage.setItem('chronos-todos', JSON.stringify(dayTodos));
+  }, [dayTodos]);
+
+  useEffect(() => {
+    if (activeTodoId) {
+      localStorage.setItem('chronos-active-todo', activeTodoId);
+    } else {
+      localStorage.removeItem('chronos-active-todo');
+    }
+  }, [activeTodoId]);
+
   const handleAddTracker = (newTracker: Tracker) => {
     if (editingTracker) {
       setTrackers(trackers.map(t => t.id === newTracker.id ? newTracker : t));
@@ -78,132 +101,272 @@ export default function App() {
     setIsModalOpen(true);
   };
 
+  const handleUpdateTodos = (date: string, todos: Todo[]) => {
+    setDayTodos(prev => {
+      const existing = prev.find(d => d.date === date);
+      const updated = existing 
+        ? prev.map(d => d.date === date ? { ...d, todos } : d)
+        : [...prev, { date, todos }];
+      
+      // If active todo was deleted, clear it
+      if (activeTodoId) {
+        const stillExists = updated.some(d => (d.todos || []).some(t => t && t.id === activeTodoId));
+        if (!stillExists) {
+          setActiveTodoId(null);
+        }
+      }
+      return updated;
+    });
+  };
+
+  const handleMoveTodo = (fromDate: string, toDate: string, updatedTodo: Todo) => {
+    setDayTodos(prev => {
+      // 1. Remove from old date
+      const withoutOld = prev.map(d => d.date === fromDate 
+        ? { ...d, todos: (d.todos || []).filter(t => t && t.id !== updatedTodo.id) }
+        : d
+      );
+      
+      // 2. Add to new date
+      const existingToDate = withoutOld.find(d => d.date === toDate);
+      const withNew = existingToDate
+        ? withoutOld.map(d => d.date === toDate 
+            ? { ...d, todos: [...(d.todos || []), updatedTodo] }
+            : d
+          )
+        : [...withoutOld, { date: toDate, todos: [updatedTodo] }];
+      
+      return withNew;
+    });
+  };
+
+  const handleToggleTodo = (todoId: string) => {
+    setDayTodos(prev => prev.map(day => ({
+      ...day,
+      todos: day.todos.map(todo => 
+        todo.id === todoId ? { ...todo, completed: !todo.completed } : todo
+      )
+    })));
+    
+    // If we're toggling the active todo, close the tracker
+    if (activeTodoId === todoId) {
+      setActiveTodoId(null);
+    }
+  };
+
+  const handleToggleAndClose = (todoId: string) => {
+    handleToggleTodo(todoId);
+    setActiveTodoId(null);
+  };
+
+  const handleStartTracking = (todoId: string) => {
+    if (activeTodoId === todoId) {
+      setActiveTodoId(null);
+      return;
+    }
+    setDayTodos(prev => (prev || []).map(day => ({
+      ...day,
+      todos: (day.todos || []).map(todo => 
+        todo && todo.id === todoId 
+          ? { ...todo, trackingStartedAt: Date.now() } 
+          : todo
+      )
+    })));
+    setActiveTodoId(todoId);
+  };
+
+  const activeTodo = dayTodos
+    .flatMap(d => d.todos || [])
+    .find(t => t && t.id === activeTodoId);
+
+  const handleViewChange = (view: 'trackers' | 'todos') => {
+    setActiveView(view);
+    if (view === 'todos') {
+      setIsFullscreen(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white font-sans selection:bg-[var(--accent1)] selection:text-black">
-      {/* Header */}
-      <AnimatePresence>
-        {!isFullscreen && (
-          <motion.header 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-md border-bottom border-white/5"
-          >
-            <div className="max-w-5xl mx-auto px-6 py-8 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[var(--accent1)] rounded-xl flex items-center justify-center text-black">
-                  <Clock size={24} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight">Chronos</h1>
-                  <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Progress Dashboard</p>
-                </div>
-              </div>
+      <Sidebar 
+        activeView={activeView} 
+        onViewChange={handleViewChange} 
+        isVisible={!isFullscreen}
+      />
 
-              <div className="flex items-center gap-4">
-                <div className="hidden sm:flex bg-white/5 rounded-lg p-1">
-                  <button 
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
-                  >
-                    <LayoutGrid size={18} />
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
-                  >
-                    <List size={18} />
-                  </button>
-                </div>
-                
-                <button
-                  onClick={() => setIsThemeModalOpen(true)}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
-                  title="Theme Settings"
-                >
-                  <Palette size={18} />
-                </button>
-
-                <button
-                  onClick={() => setIsFullscreen(true)}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
-                  title="Fullscreen Mode"
-                >
-                  <Maximize2 size={18} />
-                </button>
-
-                <button
-                  onClick={() => {
-                    setEditingTracker(null);
-                    setIsModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 bg-[var(--accent1)] hover:opacity-90 text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all transform active:scale-95 shadow-lg shadow-[var(--accent1)]/10"
-                >
-                  <Plus size={18} strokeWidth={3} />
-                  <span>Add Widget</span>
-                </button>
-              </div>
-            </div>
-          </motion.header>
-        )}
-      </AnimatePresence>
-
-      {/* Exit Fullscreen Button */}
-      <AnimatePresence>
-        {isFullscreen && (
-          <div className="fixed bottom-0 right-0 z-50 w-40 h-40 flex items-end justify-end p-8 group">
-            <button
-              className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white/40 hover:text-white rounded-full shadow-2xl border border-white/10 transition-all opacity-0 group-hover:opacity-100"
-              onClick={() => setIsFullscreen(false)}
-              title="Exit Fullscreen"
+      <div className={`transition-all duration-500 ${!isFullscreen ? 'pl-20' : 'pl-0'}`}>
+        {/* Header */}
+        <AnimatePresence>
+          {!isFullscreen && activeView === 'trackers' && (
+            <motion.header 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-md border-bottom border-white/5"
             >
-              <Minimize2 size={18} />
-            </button>
-          </div>
-        )}
-      </AnimatePresence>
+              <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-black transition-colors ${activeView === 'trackers' ? 'bg-[var(--accent1)]' : 'bg-[var(--accent2)]'}`}>
+                    {activeView === 'trackers' ? <Clock size={24} strokeWidth={2.5} /> : <Plus size={24} strokeWidth={2.5} />}
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold tracking-tight">
+                      {activeView === 'trackers' ? 'Chronos' : 'Objectives'}
+                    </h1>
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">
+                      {activeView === 'trackers' ? 'Progress Dashboard' : 'Daily Time Goals'}
+                    </p>
+                  </div>
+                </div>
 
-      {/* Main Content */}
-      <main className={`max-w-5xl mx-auto px-6 ${isFullscreen ? 'pt-4 pb-12' : 'py-12'}`}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={viewMode + (isFullscreen ? 'fs' : 'normal')}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'flex flex-col gap-6'}
-          >
-            <AnimatePresence>
-              {trackers.map((tracker) => (
-                <TrackerCard
-                  key={tracker.id}
-                  tracker={tracker}
-                  onDelete={handleDeleteTracker}
-                  onEdit={handleEditTracker}
-                />
-              ))}
-            </AnimatePresence>
+                <div className="flex items-center gap-4">
+                  {activeView === 'trackers' && (
+                    <div className="hidden sm:flex bg-white/5 rounded-lg p-1">
+                      <button 
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
+                      >
+                        <LayoutGrid size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
+                      >
+                        <List size={18} />
+                      </button>
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => setIsThemeModalOpen(true)}
+                    className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
+                    title="Theme Settings"
+                  >
+                    <Palette size={18} />
+                  </button>
 
-            {trackers.length === 0 && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="col-span-full py-32 flex flex-col items-center justify-center text-center space-y-4"
+                  <button
+                    onClick={() => setIsFullscreen(true)}
+                    className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
+                    title="Fullscreen Mode"
+                  >
+                    <Maximize2 size={18} />
+                  </button>
+
+                  {activeView === 'trackers' && (
+                    <button
+                      onClick={() => {
+                        setEditingTracker(null);
+                        setIsModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 bg-[var(--accent1)] hover:opacity-90 text-black px-5 py-2.5 rounded-xl font-bold text-sm transition-all transform active:scale-95 shadow-lg shadow-[var(--accent1)]/10"
+                    >
+                      <Plus size={18} strokeWidth={3} />
+                      <span>Add Widget</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.header>
+          )}
+        </AnimatePresence>
+
+        {/* Exit Fullscreen Button */}
+        <AnimatePresence>
+          {isFullscreen && (
+            <div className="fixed bottom-0 right-0 z-50 w-40 h-40 flex items-end justify-end p-8 group">
+              <button
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white/40 hover:text-white rounded-full shadow-2xl border border-white/10 transition-all opacity-0 group-hover:opacity-100"
+                onClick={() => setIsFullscreen(false)}
+                title="Exit Fullscreen"
               >
-                <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-white/20">
-                  <Clock size={40} />
+                <Minimize2 size={18} />
+              </button>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Content */}
+        <main className={`max-w-5xl mx-auto px-6 transition-all duration-500 ${
+          isFullscreen 
+            ? 'min-h-screen flex flex-col justify-center py-6' 
+            : activeView === 'todos' 
+              ? 'py-4' 
+              : 'py-6'
+        }`}>
+          <AnimatePresence mode="wait">
+            {activeView === 'trackers' ? (
+              <motion.div
+                key="trackers-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'flex flex-col gap-6'}>
+                  <AnimatePresence>
+                    {trackers.map((tracker) => (
+                      <TrackerCard
+                        key={tracker.id}
+                        tracker={tracker}
+                        onDelete={handleDeleteTracker}
+                        onEdit={handleEditTracker}
+                      />
+                    ))}
+                  </AnimatePresence>
+
+                  {trackers.length === 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="col-span-full py-32 flex flex-col items-center justify-center text-center space-y-4"
+                    >
+                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-white/20">
+                        <Clock size={40} />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-medium text-white/60">No trackers yet</h2>
+                        <p className="text-white/30 text-sm">Create your first progress widget to get started.</p>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
-                <div>
-                  <h2 className="text-xl font-medium text-white/60">No trackers yet</h2>
-                  <p className="text-white/30 text-sm">Create your first progress widget to get started.</p>
-                </div>
+
+                {/* Active Todo Tracker */}
+                <AnimatePresence>
+                  {activeTodo && (
+                    <div className="mt-12 flex justify-center">
+                      <ActiveTodoTracker 
+                        todo={activeTodo} 
+                        onClose={() => setActiveTodoId(null)} 
+                        onToggle={() => handleToggleAndClose(activeTodo.id)}
+                      />
+                    </div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="todos-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <TodoView 
+                  dayTodos={dayTodos} 
+                  onUpdateTodos={handleUpdateTodos} 
+                  onMoveTodo={handleMoveTodo}
+                  onStartTracking={handleStartTracking}
+                  activeTodoId={activeTodoId}
+                  onToggleTodo={handleToggleTodo}
+                />
               </motion.div>
             )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+          </AnimatePresence>
+        </main>
+      </div>
 
       <AddTrackerModal
         isOpen={isModalOpen}

@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Tracker } from '../types';
+import { Tracker, Todo } from '../types';
 import { calculateProgress, getOrdinal } from '../utils/timeUtils';
-import { Trash2, Settings2 } from 'lucide-react';
+import { Trash2, Settings2, CheckSquare } from 'lucide-react';
 
 interface TrackerCardProps {
   tracker: Tracker;
+  todos?: Todo[];
   onDelete: (id: string) => void;
   onEdit: (tracker: Tracker) => void;
 }
 
-export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onEdit }) => {
+export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, todos = [], onDelete, onEdit }) => {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -76,14 +77,35 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
         </div>
       </div>
 
-      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+      <div className="relative h-1.5 w-full bg-white/5 rounded-full">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${data.percentage}%` }}
           transition={{ duration: 1, ease: "easeOut" }}
-          className="h-full rounded-full"
-          style={{ backgroundColor: tracker.color }}
+          className="h-full rounded-full relative z-10"
+          style={{ 
+            backgroundColor: tracker.color,
+            boxShadow: `0 0 8px ${tracker.color}40`
+          }}
         />
+        
+        {/* Todo Markers */}
+        {(todos || []).map(todo => {
+          if (!todo || !todo.id) return null;
+          return (
+            <div 
+              key={todo.id}
+              className="absolute top-1/2 -translate-y-1/2 w-1 h-3 bg-white/40 rounded-full z-20 group/marker"
+              style={{ left: `${todo.percentageGoal || 0}%` }}
+            >
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none">
+                <div className="bg-black/90 backdrop-blur-md border border-white/10 px-2 py-1 rounded text-[9px] font-bold text-white whitespace-nowrap">
+                  {todo.text} ({todo.percentageGoal || 0}%)
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </motion.div>
   );
