@@ -394,7 +394,6 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="py-12 text-center"
           >
-            <p className="text-[10px] font-bold text-white/10 uppercase tracking-[0.5em]">Time is a flat circle</p>
           </motion.footer>
         )}
       </AnimatePresence>
