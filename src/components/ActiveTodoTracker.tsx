@@ -79,7 +79,7 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
         {(todo.timeGoal || todo.percentageGoal !== undefined) && (
           <div className="flex items-center gap-2 px-3 py-1 bg-[var(--accent1)] rounded-lg shadow-lg shadow-[var(--accent1)]/10">
             {todo.timeGoal && (
-              <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-black">
+              <div className="flex items-center gap-1.5 text-[13px] font-mono font-bold text-black">
                 <Clock size={14} />
                 {todo.timeGoal}
               </div>
