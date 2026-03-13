@@ -68,11 +68,11 @@ function formatDuration(startMin: number, endMin: number): string {
   const duration = endMin - startMin;
   const hours = Math.floor(duration / 60);
   const mins = duration % 60;
-  
+
   const parts = [];
   if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
   if (mins > 0) parts.push(`${mins} ${mins === 1 ? 'minute' : 'minutes'}`);
-  
+
   return parts.length > 0 ? parts.join(' ') : '0 minutes';
 }
 
@@ -170,14 +170,14 @@ const EventCard: React.FC<{
     <div
       onMouseDown={onMouseDown}
       className={`absolute left-1 right-1 rounded-lg px-2 py-1 overflow-hidden cursor-move transition-opacity shadow-sm ${todo.completed ? 'opacity-40' : 'opacity-100'
-        } ${isDragging ? 'z-50 opacity-80 ring-2 ring-[var(--accent2)] shadow-xl' : 'z-10'}
+        } ${isDragging ? 'z-50 opacity-80 ring-1 ring-[var(--accent1)] shadow-xl' : 'z-10'}
       `}
       style={{
         top: `${top}px`,
         height: `${height}px`,
         backgroundColor: todo.completed
           ? 'rgba(255,255,255,0.05)'
-          : 'color-mix(in srgb, var(--accent1), transparent 85%)',
+          : 'color-mix(in srgb, var(--accent1), transparent 80%)',
         border: todo.completed
           ? '1px solid rgba(255,255,255,0.05)'
           : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
@@ -194,7 +194,7 @@ const EventCard: React.FC<{
         </span>
       </div>
       {height > 30 && (
-        <div className={`text-[9px] mt-0.5 truncate ${todo.completed ? 'text-white/15' : 'text-white/40'
+        <div className={`text-[9px] mt-0.5 truncate ${todo.completed ? 'text-white/15' : 'text-white/60'
           }`}>
           {formatTimeDisplay(todo.startTime || '0:00')}
           {' – '}
@@ -207,11 +207,11 @@ const EventCard: React.FC<{
       {!todo.completed && onResizeStart && (
         <>
           <div
-            className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-white/20 transition-colors z-20"
+            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
             onMouseDown={(e) => onResizeStart(e, 'top')}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-white/20 transition-colors z-20"
+            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-b-2 border-transparent hover:border-[var(--accent1)] transition-all"
             onMouseDown={(e) => onResizeStart(e, 'bottom')}
           />
         </>
@@ -741,8 +741,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             setShowDayPicker(false);
                           }}
                           className={`w-full text-left px-4 py-2 text-xs font-bold transition-colors ${dayCount === n
-                              ? 'text-[var(--accent2)] bg-[var(--accent2)]/10'
-                              : 'text-white/60 hover:text-white hover:bg-white/5'
+                            ? 'text-[var(--accent2)] bg-[var(--accent2)]/10'
+                            : 'text-white/60 hover:text-white hover:bg-white/5'
                             }`}
                         >
                           {n} day{n > 1 ? 's' : ''}
@@ -795,8 +795,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
                 <div
                   className={`text-lg font-bold mt-0.5 w-9 h-9 rounded-full flex items-center justify-center mx-auto ${today
-                      ? 'bg-[var(--accent2)] text-black'
-                      : 'text-white/70'
+                    ? 'bg-[var(--accent2)] text-black'
+                    : 'text-white/70'
                     }`}
                 >
                   {format(day, 'd')}
