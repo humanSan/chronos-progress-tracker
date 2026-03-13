@@ -165,16 +165,23 @@ const EventCard: React.FC<{
 }> = ({ todo, startMin, endMin, onMouseDown, onResizeStart, isDragging }) => {
   const top = minutesToPx(startMin);
   const height = Math.max(minutesToPx(endMin - startMin), 15); // min height 15px
+  const isSmall = height <= 35;
+  const timeRange = `${formatTimeDisplay(todo.startTime || '0:00')} – ${formatTimeDisplay(todo.endTime || pxToTime(minutesToPx(endMin)))}`;
+  const durationStr = `(${formatDuration(startMin, endMin)})`;
+  const fullTimeDisplay = `${timeRange} ${durationStr}`;
 
   return (
     <div
       onMouseDown={onMouseDown}
-      className={`absolute left-1 right-1 rounded-lg px-2 py-1 overflow-hidden cursor-move transition-opacity shadow-sm ${todo.completed ? 'opacity-40' : 'opacity-100'
+      className={`absolute left-1 right-1 rounded-lg px-2 overflow-hidden cursor-move transition-opacity shadow-sm flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
+        } ${todo.completed ? 'opacity-40' : 'opacity-100'
         } ${isDragging ? 'z-50 opacity-80 ring-1 ring-[var(--accent1)] shadow-xl' : 'z-10'}
       `}
       style={{
         top: `${top}px`,
         height: `${height}px`,
+        paddingTop: isSmall ? '0' : '6.5px',
+        // paddingBottom: isSmall ? '0' : '3.5px',
         backgroundColor: todo.completed
           ? 'rgba(255,255,255,0.05)'
           : 'color-mix(in srgb, var(--accent1), transparent 80%)',
@@ -183,35 +190,40 @@ const EventCard: React.FC<{
           : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
       }}
     >
-      <div className="flex items-center gap-1.5">
+      <div className={`flex items-center gap-1.5 min-w-0 ${isSmall ? 'w-full' : ''}`}>
         <div
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
             }`}
         />
-        <span className={`text-[11px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white/90'
-          }`}>
-          {todo.text}
-        </span>
+        <div className="flex-1 min-w-0 flex items-baseline gap-2">
+          <span className={`text-[11px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white/90'
+            }`}>
+            {todo.text}
+          </span>
+          {isSmall && (
+            <span className={`text-[9px] truncate font-medium ${todo.completed ? 'text-white/10' : 'text-white/40'}`}>
+              {fullTimeDisplay}
+            </span>
+          )}
+        </div>
       </div>
-      {height > 30 && (
+      {!isSmall && (
         <div className={`text-[9px] mt-0.5 truncate ${todo.completed ? 'text-white/15' : 'text-white/60'
           }`}>
-          {formatTimeDisplay(todo.startTime || '0:00')}
-          {' – '}
-          {formatTimeDisplay(todo.endTime || pxToTime(minutesToPx(endMin)))}
+          {timeRange}
           {' '}
-          ({formatDuration(startMin, endMin)})
+          {durationStr}
         </div>
       )}
       {/* Resize handles */}
       {!todo.completed && onResizeStart && (
         <>
           <div
-            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
+            className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
             onMouseDown={(e) => onResizeStart(e, 'top')}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-b-2 border-transparent hover:border-[var(--accent1)] transition-all"
+            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-20 border-b-2 border-transparent hover:border-[var(--accent1)] transition-all"
             onMouseDown={(e) => onResizeStart(e, 'bottom')}
           />
         </>
