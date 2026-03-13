@@ -527,10 +527,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       };
 
       if (initialDateStr === currentDateStr) {
-        // Same day update
+        // Same day update - preserve original order in the array
         const dayData = dayTodos.find(d => d.date === initialDateStr);
-        const filtered = (dayData?.todos || []).filter(t => t.id !== todo.id);
-        onUpdateTodos(currentDateStr, [...filtered, updatedTodo]);
+        const newTodos = (dayData?.todos || []).map(t => t.id === todo.id ? updatedTodo : t);
+        onUpdateTodos(currentDateStr, newTodos);
       } else {
         // Move across days
         const sourceData = dayTodos.find(d => d.date === initialDateStr);
@@ -611,8 +611,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       };
 
       const dayData = dayTodos.find(d => d.date === dateStr);
-      const filtered = (dayData?.todos || []).filter(t => t.id !== todo.id);
-      onUpdateTodos(dateStr, [...filtered, updatedTodo]);
+      const newTodos = (dayData?.todos || []).map(t => t.id === todo.id ? updatedTodo : t);
+      onUpdateTodos(dateStr, newTodos);
 
       setResizingEvent(null);
     };
@@ -655,8 +655,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     };
     const dateStr = editingEvent.date;
     const dayData = dayTodos.find((d) => d.date === dateStr);
-    const filtered = (dayData?.todos || []).filter((t) => t.id !== editingEvent.todo.id);
-    onUpdateTodos(dateStr, [...filtered, updatedTodo]);
+    const newTodos = (dayData?.todos || []).map(t => t.id === editingEvent.todo.id ? updatedTodo : t);
+    onUpdateTodos(dateStr, newTodos);
     setEditingEvent(null);
     setEditingTaskText('');
   };
