@@ -7,6 +7,7 @@ import { AddTrackerModal } from './components/AddTrackerModal';
 import { ThemeSettingsModal } from './components/ThemeSettingsModal';
 import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
+import { CalendarView } from './components/CalendarView';
 import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 
 const DEFAULT_TRACKERS: Tracker[] = [
@@ -42,7 +43,7 @@ export default function App() {
     const saved = localStorage.getItem('chronos-theme');
     return saved ? JSON.parse(saved) : { accent1: '#A3E635', accent2: '#67E8F9' };
   });
-  const [activeView, setActiveView] = useState<'trackers' | 'todos'>('trackers');
+  const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'calendar'>('trackers');
   const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
     const saved = localStorage.getItem('chronos-todos');
     return saved ? JSON.parse(saved) : [];
@@ -104,10 +105,10 @@ export default function App() {
   const handleUpdateTodos = (date: string, todos: Todo[]) => {
     setDayTodos(prev => {
       const existing = prev.find(d => d.date === date);
-      const updated = existing 
+      const updated = existing
         ? prev.map(d => d.date === date ? { ...d, todos } : d)
         : [...prev, { date, todos }];
-      
+
       // If active todo was deleted, clear it
       if (activeTodoId) {
         const stillExists = updated.some(d => (d.todos || []).some(t => t && t.id === activeTodoId));
@@ -122,20 +123,20 @@ export default function App() {
   const handleMoveTodo = (fromDate: string, toDate: string, updatedTodo: Todo) => {
     setDayTodos(prev => {
       // 1. Remove from old date
-      const withoutOld = prev.map(d => d.date === fromDate 
+      const withoutOld = prev.map(d => d.date === fromDate
         ? { ...d, todos: (d.todos || []).filter(t => t && t.id !== updatedTodo.id) }
         : d
       );
-      
+
       // 2. Add to new date
       const existingToDate = withoutOld.find(d => d.date === toDate);
       const withNew = existingToDate
-        ? withoutOld.map(d => d.date === toDate 
-            ? { ...d, todos: [...(d.todos || []), updatedTodo] }
-            : d
-          )
+        ? withoutOld.map(d => d.date === toDate
+          ? { ...d, todos: [...(d.todos || []), updatedTodo] }
+          : d
+        )
         : [...withoutOld, { date: toDate, todos: [updatedTodo] }];
-      
+
       return withNew;
     });
   };
@@ -143,11 +144,11 @@ export default function App() {
   const handleToggleTodo = (todoId: string) => {
     setDayTodos(prev => prev.map(day => ({
       ...day,
-      todos: day.todos.map(todo => 
+      todos: day.todos.map(todo =>
         todo.id === todoId ? { ...todo, completed: !todo.completed } : todo
       )
     })));
-    
+
     // If we're toggling the active todo, close the tracker
     if (activeTodoId === todoId) {
       setActiveTodoId(null);
@@ -166,9 +167,9 @@ export default function App() {
     }
     setDayTodos(prev => (prev || []).map(day => ({
       ...day,
-      todos: (day.todos || []).map(todo => 
-        todo && todo.id === todoId 
-          ? { ...todo, trackingStartedAt: Date.now() } 
+      todos: (day.todos || []).map(todo =>
+        todo && todo.id === todoId
+          ? { ...todo, trackingStartedAt: Date.now() }
           : todo
       )
     })));
@@ -179,18 +180,18 @@ export default function App() {
     .flatMap(d => d.todos || [])
     .find(t => t && t.id === activeTodoId);
 
-  const handleViewChange = (view: 'trackers' | 'todos') => {
+  const handleViewChange = (view: 'trackers' | 'todos' | 'calendar') => {
     setActiveView(view);
-    if (view === 'todos') {
+    if (view === 'todos' || view === 'calendar') {
       setIsFullscreen(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white font-sans selection:bg-[var(--accent1)] selection:text-black">
-      <Sidebar 
-        activeView={activeView} 
-        onViewChange={handleViewChange} 
+    <div className={`${(activeView === 'calendar' || activeView === 'todos') ? 'h-screen overflow-hidden' : 'min-h-screen'} bg-[#0A0A0A] text-white font-sans selection:bg-[var(--accent1)] selection:text-black`}>
+      <Sidebar
+        activeView={activeView}
+        onViewChange={handleViewChange}
         isVisible={!isFullscreen}
       />
 
@@ -198,7 +199,7 @@ export default function App() {
         {/* Header */}
         <AnimatePresence>
           {!isFullscreen && activeView === 'trackers' && (
-            <motion.header 
+            <motion.header
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -222,13 +223,13 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   {activeView === 'trackers' && (
                     <div className="hidden sm:flex bg-white/5 rounded-lg p-1">
-                      <button 
+                      <button
                         onClick={() => setViewMode('grid')}
                         className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
                       >
                         <LayoutGrid size={18} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/10 text-[var(--accent1)]' : 'text-white/40 hover:text-white'}`}
                       >
@@ -236,7 +237,7 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  
+
                   <button
                     onClick={() => setIsThemeModalOpen(true)}
                     className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
@@ -287,13 +288,14 @@ export default function App() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className={`max-w-5xl mx-auto px-6 transition-all duration-500 ${
-          isFullscreen 
-            ? 'min-h-screen flex flex-col justify-center py-6' 
-            : activeView === 'todos' 
-              ? 'py-4' 
-              : 'py-6'
-        }`}>
+        <main className={`${(activeView === 'calendar' || activeView === 'todos') ? 'mx-auto px-2 h-screen' : 'max-w-5xl mx-auto px-6'} transition-all duration-500 ${isFullscreen
+            ? 'min-h-screen flex flex-col justify-center py-6'
+            : activeView === 'todos'
+              ? 'py-4'
+              : activeView === 'calendar'
+                ? 'py-0'
+                : 'py-6'
+          }`}>
           <AnimatePresence mode="wait">
             {activeView === 'trackers' ? (
               <motion.div
@@ -316,7 +318,7 @@ export default function App() {
                   </AnimatePresence>
 
                   {trackers.length === 0 && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -337,16 +339,16 @@ export default function App() {
                 <AnimatePresence>
                   {activeTodo && (
                     <div className="mt-12 flex justify-center">
-                      <ActiveTodoTracker 
-                        todo={activeTodo} 
-                        onClose={() => setActiveTodoId(null)} 
+                      <ActiveTodoTracker
+                        todo={activeTodo}
+                        onClose={() => setActiveTodoId(null)}
                         onToggle={() => handleToggleAndClose(activeTodo.id)}
                       />
                     </div>
                   )}
                 </AnimatePresence>
               </motion.div>
-            ) : (
+            ) : activeView === 'todos' ? (
               <motion.div
                 key="todos-view"
                 initial={{ opacity: 0, y: 20 }}
@@ -354,13 +356,26 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <TodoView 
-                  dayTodos={dayTodos} 
-                  onUpdateTodos={handleUpdateTodos} 
+                <TodoView
+                  dayTodos={dayTodos}
+                  onUpdateTodos={handleUpdateTodos}
                   onMoveTodo={handleMoveTodo}
                   onStartTracking={handleStartTracking}
                   activeTodoId={activeTodoId}
                   onToggleTodo={handleToggleTodo}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="calendar-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <CalendarView
+                  dayTodos={dayTodos}
+                  onUpdateTodos={handleUpdateTodos}
                 />
               </motion.div>
             )}
@@ -388,7 +403,7 @@ export default function App() {
       {/* Footer Decoration */}
       <AnimatePresence>
         {!isFullscreen && (
-          <motion.footer 
+          <motion.footer
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -20,8 +20,9 @@ export interface Todo {
   id: string;
   text: string;
   completed: boolean;
-  timeGoal?: string; // e.g. "12:00"
   percentageGoal?: number; // e.g. 50
+  startTime?: string; // HH:MM format for calendar start
+  endTime?: string;   // HH:MM format for calendar end
   createdAt: number;
   trackingStartedAt?: number; // Timestamp when tracking started
 }

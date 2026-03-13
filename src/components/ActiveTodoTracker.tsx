@@ -14,7 +14,7 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    if (!todo.timeGoal || !todo.trackingStartedAt) {
+    if (!todo.endTime || !todo.trackingStartedAt) {
       setProgress(0);
       return;
     }
@@ -24,7 +24,7 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
       const startTime = todo.trackingStartedAt!;
       
       // Parse the due time (e.g. "12:00") for today
-      const [hours, minutes] = todo.timeGoal!.split(':').map(Number);
+      const [hours, minutes] = todo.endTime!.split(':').map(Number);
       const dueTime = startOfDay(now);
       dueTime.setHours(hours, minutes, 0, 0);
 
@@ -76,15 +76,15 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
           </h3>
         </div>
 
-        {(todo.timeGoal || todo.percentageGoal !== undefined) && (
+        {(todo.endTime || todo.percentageGoal !== undefined) && (
           <div className="flex items-center gap-2 px-3 py-1 bg-[var(--accent1)] rounded-lg shadow-lg shadow-[var(--accent1)]/10">
-            {todo.timeGoal && (
+            {todo.endTime && (
               <div className="flex items-center gap-1.5 text-[13px] font-mono font-bold text-black">
                 <Clock size={14} />
-                {todo.timeGoal}
+                {todo.endTime}
               </div>
             )}
-            {todo.timeGoal && todo.percentageGoal !== undefined && (
+            {todo.endTime && todo.percentageGoal !== undefined && (
               <div className="w-px h-3 bg-black/20" />
             )}
             {todo.percentageGoal !== undefined && (
@@ -97,7 +97,7 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
       </div>
 
       {/* Progress Bar Container */}
-      {todo.timeGoal && todo.trackingStartedAt && (
+      {todo.endTime && todo.trackingStartedAt && (
         <div className="mt-4 h-1.5 bg-white/5 rounded-full relative">
           <motion.div
             initial={{ width: 0 }}
