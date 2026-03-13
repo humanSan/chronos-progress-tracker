@@ -173,7 +173,7 @@ const EventCard: React.FC<{
   return (
     <div
       onMouseDown={onMouseDown}
-      className={`absolute left-1 right-1 rounded-lg px-2 overflow-hidden cursor-move transition-opacity shadow-sm flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
+      className={`absolute left-1 right-1 rounded-lg px-2 overflow-hidden transition-opacity shadow-sm flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
         } ${todo.completed ? 'opacity-40' : 'opacity-100'
         } ${isDragging ? 'z-50 opacity-80 ring-1 ring-[var(--accent1)] shadow-xl' : 'z-10'}
       `}
