@@ -195,13 +195,13 @@ const EventCard: React.FC<{
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
             }`}
         />
-        <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <div className="flex-1 min-w-0 flex items-baseline gap-1">
           <span className={`text-[11px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white/90'
             }`}>
             {todo.text}
           </span>
           {isSmall && (
-            <span className={`text-[9px] truncate font-medium ${todo.completed ? 'text-white/10' : 'text-white/40'}`}>
+            <span className={`text-[9px] truncate text-clip font-medium ${todo.completed ? 'text-white/15' : 'text-white/60'}`}>
               {fullTimeDisplay}
             </span>
           )}
