@@ -646,7 +646,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
       {/* Right side: 1-Day Calendar */}
       <div className="w-[360px] flex-shrink-0 hidden lg:block h-full">
-        <div className="h-full overflow-hidden flex flex-col pt-4">
+        <div className="h-full overflow-hidden flex flex-col">
           <CalendarView
             dayTodos={dayTodos}
             onUpdateTodos={onUpdateTodos}

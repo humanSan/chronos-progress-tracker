@@ -799,19 +799,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             return (
               <div
                 key={day.toISOString()}
-                className="flex-1 text-center py-2 border-l border-white/5"
+                className="flex-1 text-center pb-3 border-l border-white/5"
               >
-                <div className={`text-[10px] font-bold uppercase tracking-widest ${today ? 'text-[var(--accent2)]' : 'text-white/30'
-                  }`}>
-                  {format(day, 'EEE')}
-                </div>
-                <div
-                  className={`text-lg font-bold mt-0.5 w-9 h-9 rounded-full flex items-center justify-center mx-auto ${today
-                    ? 'bg-[var(--accent2)] text-black'
+                <div className="flex items-center justify-center gap-2">
+                  <span className={`text-sm font-bold uppercase tracking-widest ${today ? 'text-[var(--accent2)]' : 'text-white/30'}`}>
+                    {format(day, 'EEE')}
+                  </span>
+                  <span className={`text-sm font-bold px-1.5 py-1 rounded-md transition-all ${today
+                    ? 'bg-[var(--accent2)] text-black shadow-lg shadow-[var(--accent2)]/20'
                     : 'text-white/70'
-                    }`}
-                >
-                  {format(day, 'd')}
+                    }`}>
+                    {format(day, 'd')}
+                  </span>
                 </div>
               </div>
             );
