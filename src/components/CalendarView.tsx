@@ -183,7 +183,7 @@ const EventCard: React.FC<{
       style={{
         top: `${top}px`,
         height: `${height}px`,
-        paddingTop: isSmall ? '0' : '6.5px',
+        paddingTop: isSmall ? '0' : '5px',
         // paddingBottom: isSmall ? '0' : '3.5px',
         backgroundColor: todo.completed
           ? ((isHovered || isDragging) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)')
@@ -213,7 +213,7 @@ const EventCard: React.FC<{
         </div>
       </div>
       {!isSmall && (
-        <div className={`text-[10px] mt-0.5 truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/70'
+        <div className={`text-[10px] truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/70'
           }`}>
           {timeRange}
           {' '}
