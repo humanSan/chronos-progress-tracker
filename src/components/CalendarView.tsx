@@ -176,9 +176,9 @@ const EventCard: React.FC<{
       onMouseDown={onMouseDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`absolute left-1 right-1 rounded-lg px-2 overflow-hidden cursor-auto transition-opacity shadow-sm flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
+      className={`absolute left-1 right-1 rounded-md px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
         } ${todo.completed ? 'opacity-40' : 'opacity-100'
-        } ${isDragging ? 'z-50 opacity-80 ring-1 ring-[var(--accent1)] shadow-xl' : 'z-10'}
+        } ${isDragging ? 'z-50 ring-1 ring-[var(--accent1)]' : 'z-10 ring-1 ring-black'}
       `}
       style={{
         top: `${top}px`,
@@ -186,8 +186,8 @@ const EventCard: React.FC<{
         paddingTop: isSmall ? '0' : '6.5px',
         // paddingBottom: isSmall ? '0' : '3.5px',
         backgroundColor: todo.completed
-          ? (isHovered ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)')
-          : (isHovered
+          ? ((isHovered || isDragging) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)')
+          : ((isHovered || isDragging)
             ? 'color-mix(in srgb, var(--accent1) 40%, black 60%)'
             : 'color-mix(in srgb, var(--accent1) 30%, black 70%)'),
         // border: todo.completed
@@ -200,20 +200,20 @@ const EventCard: React.FC<{
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
             }`}
         />
-        <div className="flex-1 min-w-0 flex items-baseline gap-1">
-          <span className={`text-[11px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white/90'
+        <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+          <span className={`text-[12px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white'
             }`}>
             {todo.text}
           </span>
           {isSmall && (
-            <span className={`text-[9px] truncate text-clip font-medium ${todo.completed ? 'text-white/15' : 'text-white/60'}`}>
+            <span className={`text-[10px] truncate text-clip ${todo.completed ? 'text-white/15' : 'text-white/70'}`}>
               {fullTimeDisplay}
             </span>
           )}
         </div>
       </div>
       {!isSmall && (
-        <div className={`text-[9px] mt-0.5 truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/60'
+        <div className={`text-[10px] mt-0.5 truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/70'
           }`}>
           {timeRange}
           {' '}
@@ -227,11 +227,11 @@ const EventCard: React.FC<{
       {!todo.completed && onResizeStart && (
         <>
           <div
-            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
+            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-transparent"
             onMouseDown={(e) => onResizeStart(e, 'top')}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-b-2 border-transparent"
+            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-transparent"
             onMouseDown={(e) => onResizeStart(e, 'bottom')}
           />
         </>
