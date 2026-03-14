@@ -456,9 +456,9 @@ export const TodoView: React.FC<TodoViewProps> = ({
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 flex gap-8 h-screen overflow-hidden">
+    <div className="max-w-[1200px] mx-auto px-6 pt-4 flex gap-8 h-screen overflow-hidden">
       {/* Left side: Todo List */}
-      <div className="flex-1 min-w-0 overflow-y-auto pr-2 pb-20 calendar-scroll">
+      <div className="flex-1 min-w-0 overflow-y-auto pr-2 pb-20">
         {/* Date Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">

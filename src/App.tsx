@@ -291,7 +291,7 @@ export default function App() {
         <main className={`${(activeView === 'calendar' || activeView === 'todos') ? 'mx-auto px-2 h-screen' : 'max-w-5xl mx-auto px-6'} transition-all duration-500 ${isFullscreen
             ? 'min-h-screen flex flex-col justify-center py-6'
             : activeView === 'todos'
-              ? 'py-4'
+              ? 'py-0'
               : activeView === 'calendar'
                 ? 'py-0'
                 : 'py-6'
