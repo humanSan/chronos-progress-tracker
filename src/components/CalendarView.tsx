@@ -801,7 +801,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* Column headers */}
         <div className="flex flex-shrink-0 border-b border-white/5">
           {/* Gutter for time labels */}
-          <div className="w-14 flex-shrink-0" />
+          <div className="w-16 flex-shrink-0" />
           {visibleDays.map((day) => {
             const today = isToday(day);
             return (
@@ -832,7 +832,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         >
           <div className="flex relative" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
             {/* Time labels gutter */}
-            <div className="w-14 flex-shrink-0 relative">
+            <div className="w-16 flex-shrink-0 relative">
               {HOURS.map((h) => (
                 <div
                   key={h}
@@ -851,11 +851,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 style={{ top: `${minutesToPx(nowMinutes)}px` }}
               >
                 {/* Global Thin Line */}
-                <div className="absolute left-14 right-0 h-[1px] bg-[#D93D42] opacity-30" />
+                <div className="absolute left-20 right-0 h-[1px] bg-[#D93D42] opacity-30" />
 
                 {/* Badge Container */}
-                <div className="absolute left-0 w-14 h-[1px]">
-                  <div className="absolute right-[2px] px-1.5 py-[3px] bg-[#D93D42] rounded text-[10px] font-mono font-bold text-white leading-none z-10 -translate-y-1/2">
+                <div className="absolute left-0 w-16 h-[1px]">
+                  <div className="absolute right-[2px] px-1.5 py-[3px] bg-[#D93D42] rounded text-[10px] font-mono font-bold text-white leading-none z-10 -translate-y-1/2 whitespace-nowrap">
                     {format(now, 'h:mm a').toUpperCase()}
                   </div>
                   {/* Connector linking badge to global line */}
