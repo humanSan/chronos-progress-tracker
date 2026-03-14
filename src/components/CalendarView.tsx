@@ -163,8 +163,9 @@ const EventCard: React.FC<{
   onResizeStart?: (e: React.MouseEvent, edge: 'top' | 'bottom') => void;
   isDragging?: boolean;
 }> = ({ todo, startMin, endMin, onMouseDown, onResizeStart, isDragging }) => {
-  const top = minutesToPx(startMin);
-  const height = Math.max(minutesToPx(endMin - startMin), 15); // min height 15px
+  const [isHovered, setIsHovered] = useState(false);
+  const top = minutesToPx(startMin) + 1;
+  const height = Math.max(minutesToPx(endMin - startMin), 15) - 2; // min height 15px
   const isSmall = height <= 35;
   const timeRange = `${formatTimeDisplay(todo.startTime || '0:00')} – ${formatTimeDisplay(todo.endTime || pxToTime(minutesToPx(endMin)))}`;
   const durationStr = `(${formatDuration(startMin, endMin)})`;
@@ -173,6 +174,8 @@ const EventCard: React.FC<{
   return (
     <div
       onMouseDown={onMouseDown}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`absolute left-1 right-1 rounded-lg px-2 overflow-hidden cursor-auto transition-opacity shadow-sm flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
         } ${todo.completed ? 'opacity-40' : 'opacity-100'
         } ${isDragging ? 'z-50 opacity-80 ring-1 ring-[var(--accent1)] shadow-xl' : 'z-10'}
@@ -183,14 +186,16 @@ const EventCard: React.FC<{
         paddingTop: isSmall ? '0' : '6.5px',
         // paddingBottom: isSmall ? '0' : '3.5px',
         backgroundColor: todo.completed
-          ? 'rgba(255,255,255,0.05)'
-          : 'color-mix(in srgb, var(--accent1), transparent 80%)',
-        border: todo.completed
-          ? '1px solid rgba(255,255,255,0.05)'
-          : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
+          ? (isHovered ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)')
+          : (isHovered
+            ? 'color-mix(in srgb, var(--accent1) 40%, black 60%)'
+            : 'color-mix(in srgb, var(--accent1) 30%, black 70%)'),
+        // border: todo.completed
+        //   ? '1px solid rgba(255,255,255,0.05)'
+        //   : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
       }}
     >
-      <div className={`flex items-center gap-1.5 min-w-0 ${isSmall ? 'w-full' : ''}`}>
+      <div className={`flex items-center gap-1.5 min-w-0 pl-1 ${isSmall ? 'w-full' : ''}`}>
         <div
           className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
             }`}
@@ -208,22 +213,25 @@ const EventCard: React.FC<{
         </div>
       </div>
       {!isSmall && (
-        <div className={`text-[9px] mt-0.5 truncate ${todo.completed ? 'text-white/15' : 'text-white/60'
+        <div className={`text-[9px] mt-0.5 truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/60'
           }`}>
           {timeRange}
           {' '}
           {durationStr}
         </div>
       )}
+      {!todo.completed && (
+        <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent1)]" />
+      )}
       {/* Resize handles */}
       {!todo.completed && onResizeStart && (
         <>
           <div
-            className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
+            className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-t-2 border-transparent hover:border-[var(--accent1)] transition-all"
             onMouseDown={(e) => onResizeStart(e, 'top')}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-20 border-b-2 border-transparent hover:border-[var(--accent1)] transition-all"
+            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-b-2 border-transparent"
             onMouseDown={(e) => onResizeStart(e, 'bottom')}
           />
         </>
