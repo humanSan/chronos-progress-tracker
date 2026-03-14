@@ -188,7 +188,7 @@ export default function App() {
   };
 
   return (
-    <div className={`${(activeView === 'calendar' || activeView === 'todos') ? 'h-screen overflow-hidden' : 'min-h-screen'} bg-[#0A0A0A] text-white font-sans selection:bg-[var(--accent1)] selection:text-black`}>
+    <div className={`${(activeView === 'calendar' || activeView === 'todos') ? 'h-screen overflow-hidden' : 'min-h-screen'} bg-neutral-950 text-white font-sans selection:bg-[var(--accent1)] selection:text-black`}>
       <Sidebar
         activeView={activeView}
         onViewChange={handleViewChange}
@@ -203,7 +203,7 @@ export default function App() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-md border-bottom border-white/5"
+              className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-md border-bottom border-white/5"
             >
               <div className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -289,12 +289,12 @@ export default function App() {
 
         {/* Main Content */}
         <main className={`${(activeView === 'calendar' || activeView === 'todos') ? 'mx-auto px-2 h-screen' : 'max-w-5xl mx-auto px-6'} transition-all duration-500 ${isFullscreen
-            ? 'min-h-screen flex flex-col justify-center py-6'
-            : activeView === 'todos'
+          ? 'min-h-screen flex flex-col justify-center py-6'
+          : activeView === 'todos'
+            ? 'py-0'
+            : activeView === 'calendar'
               ? 'py-0'
-              : activeView === 'calendar'
-                ? 'py-0'
-                : 'py-6'
+              : 'py-6'
           }`}>
           <AnimatePresence mode="wait">
             {activeView === 'trackers' ? (

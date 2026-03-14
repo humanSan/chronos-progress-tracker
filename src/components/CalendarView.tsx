@@ -176,9 +176,9 @@ const EventCard: React.FC<{
       onMouseDown={onMouseDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`absolute left-1 right-1 rounded-md px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
+      className={`absolute left-1 right-1 rounded-sm px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
         } ${todo.completed ? 'opacity-40' : 'opacity-100'
-        } ${isDragging ? 'z-50 ring-1 ring-[var(--accent1)]' : 'z-10 ring-1 ring-black'}
+        } ${isDragging ? 'z-50 ring-1 ring-[var(--accent1)]' : 'z-10 ring-1 ring-neutral-950'}
       `}
       style={{
         top: `${top}px`,
