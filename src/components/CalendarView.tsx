@@ -176,7 +176,7 @@ const EventCard: React.FC<{
       onMouseDown={onMouseDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`absolute left-1 right-1 rounded-sm px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
+      className={`absolute left-1 right-1 rounded-md px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
         } ${todo.completed ? 'opacity-40' : 'opacity-100'
         } ${isDragging ? 'z-50 ring-1 ring-[var(--accent1)]' : 'z-10 ring-1 ring-neutral-950'}
       `}
@@ -195,13 +195,13 @@ const EventCard: React.FC<{
         //   : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
       }}
     >
-      <div className={`flex items-center gap-1.5 min-w-0 pl-1 ${isSmall ? 'w-full' : ''}`}>
+      <div className={`flex gap-1.5 min-w-0 pl-1 ${isSmall ? 'w-full' : ''}`}>
         <div
-          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
+          className={`w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
             }`}
         />
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-          <span className={`text-[12px] font-semibold truncate ${todo.completed ? 'text-white/30 line-through' : 'text-white'
+          <span className={`text-[12px] font-semibold ${height < 50 ? 'truncate' : ''} ${todo.completed ? 'text-white/30 line-through' : 'text-white'
             }`}>
             {todo.text}
           </span>
@@ -213,7 +213,7 @@ const EventCard: React.FC<{
         </div>
       </div>
       {!isSmall && (
-        <div className={`text-[10px] truncate pl-1 ${todo.completed ? 'text-white/15' : 'text-white/70'
+        <div className={`text-[10px] truncate pl-4 ${todo.completed ? 'text-white/15' : 'text-white/70'
           }`}>
           {timeRange}
           {' '}

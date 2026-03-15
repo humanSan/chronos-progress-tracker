@@ -236,7 +236,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
         </p>
       </div>
 
-      {todo.endTime && (
+      {/* {todo.endTime && (
         <button
           onClick={() => onStartTracking(todo.id)}
           className={`opacity-0 group-hover:opacity-100 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${isActive
@@ -244,17 +244,19 @@ const TodoItem: React.FC<TodoItemProps> = ({
             : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white'
             }`}
         >
-          {isActive ? 'Tracking' : 'Show tracker'}
+          {isActive ? 'Tracking' : 'Track'}
         </button>
-      )}
+      )} */}
 
       {(todo.endTime || todo.percentageGoal !== undefined) && (
-        <div className={`flex items-center gap-2 px-3 py-1 rounded-lg transition-all duration-500 ${todo.completed
-          ? 'bg-white/5 shadow-none'
-          : isActive
-            ? 'bg-[var(--accent1)] shadow-lg shadow-[var(--accent1)]/10'
-            : 'bg-white/5 shadow-none'
-          }`}>
+        <div
+          onClick={() => onStartTracking(todo.id)}
+          className={`flex items-center gap-2 px-3 cursor-pointer py-1 rounded-lg transition ${todo.completed
+            ? 'bg-white/5 shadow-none'
+            : isActive
+              ? 'bg-[var(--accent1)] shadow-lg shadow-[var(--accent1)]/10'
+              : 'bg-white/5 shadow-none hover:bg-white/10'
+            }`}>
           {todo.endTime && (
             <div className={`flex items-center gap-1.5 text-[13px] font-mono font-bold transition-colors duration-500 ${todo.completed
               ? 'text-white/20'

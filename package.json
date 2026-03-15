@@ -1,6 +1,6 @@
 {
   "name": "react-example",
-  "homepage" : "https://humansan.github.io/chronos-progress-tracker",
+  "homepage": "https://humansan.github.io/chronos-progress-tracker",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,12 +12,12 @@
     "lint": "tsc --noEmit",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
-
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource/iosevka": "^5.2.5",
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
