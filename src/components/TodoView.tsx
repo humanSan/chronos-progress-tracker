@@ -393,7 +393,7 @@ const StreakHeatmapModal: React.FC<HeatmapModalProps> = ({ dayTodos, onClose }) 
     return dayCompletionLevel(entry.todos);
   };
 
-  const DOW_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <motion.div
@@ -686,7 +686,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-4 flex gap-8 h-screen overflow-hidden">
       {/* Left side: Todo List */}
-      <div className="flex-1 min-w-0 overflow-y-auto pr-2 pb-20">
+      <div className="flex-1 min-w-0 overflow-y-auto overflow-x-visible pr-2 pb-20">
         {/* Date Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -873,15 +873,13 @@ export const TodoView: React.FC<TodoViewProps> = ({
         </div>
 
         {/* ── Bottom: Streak + Progress Bar ─────────────────────────────── */}
-        <div className="mt-8 mb-4">
-          <div className="flex items-center gap-4">
+        <div className="mt-8 mb-4 py-2">
+          <div className="flex items-center gap-4 overflow-visible">
 
             {/* Streak Badge */}
-            <motion.button
+            <button
               onClick={() => setShowHeatmap(true)}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex-shrink-0 flex flex-col items-center gap-0.5 px-4 py-3 rounded-2xl cursor-pointer relative overflow-hidden"
+              className="flex-shrink-0 w-16 h-16 flex flex-col items-center justify-center gap-1 rounded-2xl cursor-pointer transition-all duration-200 hover:brightness-125 active:brightness-90"
               style={{
                 background: streakScore > 0
                   ? 'linear-gradient(135deg, rgba(168,85,247,0.18) 0%, rgba(236,72,153,0.12) 100%)'
@@ -893,34 +891,15 @@ export const TodoView: React.FC<TodoViewProps> = ({
               }}
               title="Click to see heatmap"
             >
-              {streakScore > 0 && (
-                <motion.div
-                  className="absolute inset-0 opacity-20"
-                  animate={{ backgroundPosition: ['0% 0%', '100% 100%'] }}
-                  transition={{ duration: 4, repeat: Infinity, repeatType: 'reverse' }}
-                  style={{
-                    background: 'radial-gradient(circle at 30% 40%, rgba(192,132,252,0.6) 0%, transparent 60%), radial-gradient(circle at 80% 70%, rgba(236,72,153,0.4) 0%, transparent 50%)',
-                  }}
-                />
-              )}
-              <div className="relative flex items-center gap-1.5">
-                <Flame
-                  size={14}
-                  className={streakScore > 0 ? 'text-purple-400' : 'text-white/20'}
-                />
-                <span
-                  className="text-xl font-black tabular-nums"
-                  style={{
-                    color: streakScore > 0 ? '#c084fc' : 'rgba(255,255,255,0.2)',
-                  }}
-                >
-                  {streakScore}
-                </span>
-              </div>
-              <span className="relative text-[9px] font-bold uppercase tracking-widest text-white/25">
-                Streak
+              <span
+                className="text-3xl font-black tabular-nums leading-none"
+                style={{
+                  color: streakScore > 0 ? '#e9d5ff' : 'rgba(255,255,255,0.2)',
+                }}
+              >
+                {streakScore}
               </span>
-            </motion.button>
+            </button>
 
             {/* Prismatic Progress Bar */}
             <div className="flex-1 flex flex-col gap-2">
@@ -952,7 +931,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                       : 'none',
                   }}
                 />
-                {/* Shimmer overlay */}
+                {/* Shimmer overlay
                 {progressPct > 0 && (
                   <motion.div
                     className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
@@ -963,7 +942,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                       background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
                     }}
                   />
-                )}
+                )} */}
               </div>
               {/* Completion message */}
               {progressPct === 1 && totalTodos > 0 && (
