@@ -485,7 +485,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-between items-end border-b border-white/5 pb-4">
+          <div className="flex justify-between items-end border-b border-white/5 pb-4 px-1">
             {weekDays.map((day) => {
               const isSelected = isSameDay(day, parseISO(selectedDate));
               const isToday = isSameDay(day, new Date());
