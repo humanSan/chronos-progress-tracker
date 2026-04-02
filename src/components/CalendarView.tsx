@@ -20,6 +20,8 @@ import {
   ChevronDown,
   X,
   Clock,
+  Circle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Todo, DayTodos } from '../types';
 import { timeToPercentage } from '../utils/timeUtils';
@@ -162,7 +164,8 @@ const EventCard: React.FC<{
   onMouseDown?: (e: React.MouseEvent) => void;
   onResizeStart?: (e: React.MouseEvent, edge: 'top' | 'bottom') => void;
   isDragging?: boolean;
-}> = ({ todo, startMin, endMin, onMouseDown, onResizeStart, isDragging }) => {
+  onToggle?: (e: React.MouseEvent) => void;
+}> = ({ todo, startMin, endMin, onMouseDown, onResizeStart, isDragging, onToggle }) => {
   const [isHovered, setIsHovered] = useState(false);
   const top = minutesToPx(startMin) + 1;
   const height = Math.max(minutesToPx(endMin - startMin), 15) - 2; // min height 15px
@@ -197,9 +200,34 @@ const EventCard: React.FC<{
     >
       <div className={`flex gap-1.5 min-w-0 pl-1 ${isSmall ? 'w-full' : ''}`}>
         <div
-          className={`w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
-            }`}
-        />
+          className="w-1.5 h-1.5 mt-1.5 rounded-full flex-shrink-0 flex items-center justify-center relative"
+          onClick={(e) => {
+            if (onToggle) {
+              e.stopPropagation();
+              onToggle(e);
+            }
+          }}
+          onMouseDown={(e) => {
+            if (onToggle) e.stopPropagation();
+          }}
+        >
+          {(isHovered && onToggle) ? (
+            <div className="absolute cursor-pointer flex items-center justify-center z-50">
+              <motion.div
+                initial={{ scale: 0.4, opacity: 0 }}
+                animate={{ scale: 0.8, opacity: 1 }}
+                className={'text-[var(--accent1)]'}
+              >
+                {todo.completed ? <CheckCircle2 size={15} strokeWidth={2.5} /> : <Circle size={15} strokeWidth={2.5} />}
+              </motion.div>
+            </div>
+          ) : (
+            <div
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
+                }`}
+            />
+          )}
+        </div>
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
           <span className={`text-[12px] font-semibold ${height < 50 ? 'truncate' : ''} ${todo.completed ? 'text-white/30 line-through' : 'text-white'
             }`}>
@@ -305,6 +333,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     currentStartMins: number;
     currentEndMins: number;
   } | null>(null);
+
+  const handleToggleTodo = useCallback((dateStr: string, todoId: string) => {
+    const dayData = dayTodos.find(d => d.date === dateStr);
+    if (!dayData) return;
+    const newTodos = (dayData.todos || []).map(t =>
+      t && t.id === todoId ? { ...t, completed: !t.completed } : t
+    );
+    onUpdateTodos(dateStr, newTodos);
+  }, [dayTodos, onUpdateTodos]);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -929,6 +966,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           endMin={endMin}
                           onMouseDown={(e) => handleEventMouseDown(e, todo, dateStr, startMin, endMin)}
                           onResizeStart={(e, edge) => handleEventResizeStart(e, todo, dateStr, edge, startMin, endMin)}
+                          onToggle={() => handleToggleTodo(dateStr, todo.id)}
                         />
                       </div>
                     );

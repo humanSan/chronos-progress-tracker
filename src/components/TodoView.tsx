@@ -213,7 +213,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
 
       <button
         onClick={() => onToggle(todo.id)}
-        className="relative"
+        className="relative cursor-pointer"
       >
         <motion.div
           animate={todo.completed ? { scale: [1, 1.2, 1], rotate: [0, 10, 0] } : {}}
@@ -232,7 +232,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
         )}
       </button>
 
-      <div className="flex-1 min-w-0 cursor-pointer group/text" onClick={() => onEdit(todo)}>
+      <div className="flex-1 min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
         <p className={`text-lg transition duration-500 ${isActive ? 'font-bold' : 'font-medium'
           } ${todo.completed
             ? 'text-white/20 line-through translate-x-2'
