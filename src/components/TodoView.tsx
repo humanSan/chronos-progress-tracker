@@ -350,6 +350,17 @@ const HEAT_COLORS = [
   '#fde68a',                  // 7 – max
 ];
 
+const COLORS = [
+  "hsl(260 80% 55%)",  // Purple
+  "hsl(335 85% 60%)",  // Pink
+  "hsl(48 100% 52%)",   // Sunset
+  "hsl(100 75% 60%)",   // Yellow
+  "hsl(160 80% 50%)",  // Green
+  "hsl(215 80% 60%)", // Turquoise
+];
+
+
+
 function dayCompletionLevel(todos: DayTodos['todos']): number {
   if (!todos || todos.length === 0) return 0;
   const done = todos.filter(t => t?.completed).length;
@@ -647,10 +658,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
     const todos = currentDayData.todos || [];
     const total = todos.length;
     const done = todos.filter(t => t?.completed).length;
+    const dayIndex = new Date().getDay();
     return {
       totalTodos: total,
       completedTodos: done,
       progressPct: total === 0 ? 0 : done / total,
+      dayIndex: dayIndex
     };
   }, [currentDayData.todos]);
 
@@ -682,6 +695,49 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
     return Math.max(last7Count, consecutive);
   }, [dayTodos]);
+
+  const isTodayComplete = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const entry = dayTodos.find(x => x.date === today);
+    return entry ? isFullyComplete(entry.todos) : false;
+  }, [dayTodos]);
+
+  const { c1, c2 } = useMemo(() => {
+    const colorIndex = Math.max(0, isTodayComplete ? streakScore - 1 : streakScore);
+    return {
+      c1: COLORS[colorIndex % COLORS.length],
+      c2: COLORS[(colorIndex + 1) % COLORS.length]
+    };
+  }, [streakScore, isTodayComplete]);
+
+  const streakStyles = useMemo(() => {
+    if (streakScore === 0) {
+      return {
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: 'none',
+        textColor: 'rgba(255,255,255,0.3)'
+      };
+    }
+
+    const baseColor = `color-mix(in oklab, ${c1} 90%, ${c2} 10%)`;
+
+    if (isTodayComplete) {
+      return {
+        background: `color-mix(in oklab, ${baseColor} 20%, transparent 80%)`,
+        border: `1px solid color-mix(in oklab, ${baseColor} 50%, transparent 50%)`,
+        boxShadow: `0 0 12px hsl(from ${baseColor} h s l / 0.15)`,
+        textColor: `color-mix(in oklab, ${baseColor} 30%, white 70%)`
+      };
+    }
+
+    return {
+      background: `rgba(255,255,255,0.04)`,
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: 'none',
+      textColor: `color-mix(in oklab, ${baseColor} 85%, white 15%)`
+    };
+  }, [streakScore, isTodayComplete, c1, c2]);
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 pt-4 flex gap-8 h-screen overflow-hidden">
@@ -879,22 +935,18 @@ export const TodoView: React.FC<TodoViewProps> = ({
             {/* Streak Badge */}
             <button
               onClick={() => setShowHeatmap(true)}
-              className="flex-shrink-0 w-16 h-16 flex flex-col items-center justify-center gap-1 rounded-2xl cursor-pointer transition-all duration-200 hover:brightness-125 active:brightness-90"
+              className="flex-shrink-0 w-16 h-16 flex flex-col items-center justify-center gap-1 rounded-2xl cursor-pointer transition-all duration-200 hover:brightness-125"
               style={{
-                background: streakScore > 0
-                  ? 'linear-gradient(135deg, rgba(168,85,247,0.18) 0%, rgba(236,72,153,0.12) 100%)'
-                  : 'rgba(255,255,255,0.04)',
-                border: streakScore > 0
-                  ? '1px solid rgba(168,85,247,0.35)'
-                  : '1px solid rgba(255,255,255,0.07)',
-                boxShadow: streakScore > 0 ? '0 0 20px rgba(168,85,247,0.12)' : 'none',
+                background: streakStyles.background,
+                border: streakStyles.border,
+                boxShadow: streakStyles.boxShadow,
               }}
               title="Click to see heatmap"
             >
               <span
                 className="text-3xl font-black tabular-nums leading-none"
                 style={{
-                  color: streakScore > 0 ? '#e9d5ff' : 'rgba(255,255,255,0.2)',
+                  color: streakStyles.textColor,
                 }}
               >
                 {streakScore}
@@ -906,7 +958,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">Today's Progress</span>
                 <span className="text-[11px] font-bold tabular-nums" style={{
-                  color: totalTodos === 0 ? 'rgba(255,255,255,0.2)' : '#a78bfa',
+                  color: totalTodos === 0 ? 'rgba(255,255,255,0.2)' : `hsl(from ${c2} h 90% 75%)`,
                 }}>
                   {completedTodos}/{totalTodos}
                 </span>
@@ -924,10 +976,10 @@ export const TodoView: React.FC<TodoViewProps> = ({
                   style={{
                     background: totalTodos === 0
                       ? 'rgba(255,255,255,0.08)'
-                      : 'linear-gradient(90deg, #7c3aed 0%, #a855f7 20%, #ec4899 45%, #f97316 65%, #eab308 80%, #22d3ee 100%)',
-                    backgroundSize: '200% 100%',
+                      : `linear-gradient(90deg, ${c1} 0%, ${c2} 100%)`,
+                    backgroundSize: `${100 / progressPct}%`,
                     boxShadow: progressPct > 0
-                      ? '0 0 16px rgba(168,85,247,0.5), 0 0 32px rgba(236,72,153,0.25)'
+                      ? `0 0 16px hsl(from ${c1} h s l / 0.4)`
                       : 'none',
                   }}
                 />
@@ -950,7 +1002,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: '#c084fc' }}
+                  style={{ color: `hsl(from ${c1} h 90% 75%)` }}
                 >
                   ✦ All tasks complete!
                 </motion.p>
