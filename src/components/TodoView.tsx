@@ -724,8 +724,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
     if (isTodayComplete) {
       return {
-        background: `color-mix(in oklab, ${baseColor} 20%, transparent 80%)`,
-        border: `1px solid color-mix(in oklab, ${baseColor} 50%, transparent 50%)`,
+        background: `linear-gradient(135deg, color-mix(in oklab, ${baseColor} 25%, transparent 75%) 0%, color-mix(in oklab, ${baseColor} 15%, transparent 85%) 100%)`,
+        border: `1px solid color-mix(in oklab, ${baseColor} 30%, transparent 70%)`,
         boxShadow: `0 0 12px hsl(from ${baseColor} h s l / 0.15)`,
         textColor: `color-mix(in oklab, ${baseColor} 30%, white 70%)`
       };
