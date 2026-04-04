@@ -24,7 +24,8 @@ import {
   Clock,
   CheckSquare,
   X,
-  Flame
+  Flame,
+  Settings
 } from 'lucide-react';
 import {
   DndContext,
@@ -521,6 +522,78 @@ const StreakHeatmapModal: React.FC<HeatmapModalProps> = ({ dayTodos, onClose }) 
   );
 };
 
+// ─── Todo Settings Modal ─────────────────────────────────────────────────────
+
+interface TodoSettingsModalProps {
+  weekStartsOn: number;
+  onUpdate: (val: number) => void;
+  onClose: () => void;
+}
+
+const TodoSettingsModal: React.FC<TodoSettingsModalProps> = ({ weekStartsOn, onUpdate, onClose }) => {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      ref={overlayRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }}
+        className="w-[360px] bg-[#1A1A1A] border border-[var(--accent2)]/30 rounded-3xl p-6 shadow-2xl relative"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all"
+        >
+          <X size={16} />
+        </button>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-xl bg-white/5 text-[var(--accent2)]">
+            <Settings size={20} />
+          </div>
+          <div>
+            <h2 className="text-white font-bold text-lg">Todo Settings</h2>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">First Day of Week</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onUpdate(0)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${weekStartsOn === 0 ? 'bg-[var(--accent2)] text-black' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'}`}
+              >
+                Sunday
+              </button>
+              <button
+                onClick={() => onUpdate(1)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${weekStartsOn === 1 ? 'bg-[var(--accent2)] text-black' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'}`}
+              >
+                Monday
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 // ─── TodoView ────────────────────────────────────────────────────────────────
 export const TodoView: React.FC<TodoViewProps> = ({
   dayTodos,
@@ -537,6 +610,16 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const [newTodoPercent, setNewTodoPercent] = useState<string>('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [weekStartsOn, setWeekStartsOn] = useState<number>(() => {
+    const saved = localStorage.getItem('chronos-week-starts-on');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+
+  const handleUpdateWeekStartsOn = (val: number) => {
+    setWeekStartsOn(val);
+    localStorage.setItem('chronos-week-starts-on', val.toString());
+  };
 
   const handleNewTimeChange = (val: string) => {
     setNewTodoTime(val);
@@ -565,12 +648,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
   }, [dayTodos, selectedDate]);
 
   const weekDays = useMemo(() => {
-    const start = startOfWeek(parseISO(selectedDate), { weekStartsOn: 1 });
+    const start = startOfWeek(parseISO(selectedDate), { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 });
     return eachDayOfInterval({
       start,
-      end: endOfWeek(start, { weekStartsOn: 1 })
+      end: endOfWeek(start, { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 })
     });
-  }, [selectedDate]);
+  }, [selectedDate, weekStartsOn]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -1035,6 +1118,28 @@ export const TodoView: React.FC<TodoViewProps> = ({
           />
         )}
       </AnimatePresence>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <TodoSettingsModal
+            weekStartsOn={weekStartsOn}
+            onUpdate={handleUpdateWeekStartsOn}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Floating Settings Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setShowSettings(true)}
+          className="p-3 bg-[#1A1A1A] hover:bg-[#252525] border border-white/10 text-white/60 hover:text-white rounded-full shadow-lg transition-all"
+          title="Todo Settings"
+        >
+          <Settings size={20} />
+        </button>
+      </div>
     </div>
   );
 };
