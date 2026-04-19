@@ -266,10 +266,9 @@ const TodoItem: React.FC<TodoItemProps> = ({
       </button>
 
       <div className="flex-1 min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
-        <p className={`text-lg transition duration-500 ${isActive ? 'font-bold' : 'font-medium'
-          } ${todo.completed
-            ? 'text-white/20 line-through translate-x-2'
-            : 'text-white group-hover/text:text-[var(--accent2)]'
+        <p className={`text-lg transition duration-500 font-medium ${todo.completed
+          ? 'text-white/20 line-through translate-x-2'
+          : 'text-white group-hover/text:text-[var(--accent2)]'
           }`}>
           {todo.text}
         </p>
