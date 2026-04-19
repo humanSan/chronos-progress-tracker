@@ -72,6 +72,7 @@ interface SortableItemProps {
   onSaveEdit: (id: string, text: string, time: string, percent: string, newDate: string) => void;
   onStartTracking: (id: string) => void;
   isActive: boolean;
+  now: Date;
 }
 
 interface TodoItemProps {
@@ -90,6 +91,7 @@ interface TodoItemProps {
   attributes?: any;
   listeners?: any;
   setNodeRef?: (node: HTMLElement | null) => void;
+  now: Date;
 }
 
 const TodoItem: React.FC<TodoItemProps> = ({
@@ -107,13 +109,13 @@ const TodoItem: React.FC<TodoItemProps> = ({
   style,
   attributes,
   listeners,
-  setNodeRef
+  setNodeRef,
+  now
 }) => {
   const [editText, setEditText] = useState(todo.text);
   const [editTime, setEditTime] = useState(todo.endTime || '');
   const [editPercent, setEditPercent] = useState(todo.percentageGoal?.toString() || '');
   const [editDate, setEditDate] = useState(date);
-  const [now, setNow] = useState(new Date());
 
   // Sync internal state when todo or date changes
   React.useEffect(() => {
@@ -123,14 +125,6 @@ const TodoItem: React.FC<TodoItemProps> = ({
     setEditDate(date);
   }, [todo, date]);
 
-  useEffect(() => {
-    if (todo.endTime) {
-      const interval = setInterval(() => {
-        setNow(new Date());
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [todo.endTime]);
 
   const countdown = useMemo(() => {
     if (!todo.endTime) return null;
@@ -147,11 +141,11 @@ const TodoItem: React.FC<TodoItemProps> = ({
     const mins = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
 
-    if (h > 0) {
-      return `${h.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    } else {
-      return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
+    // if (h > 0) {
+    return `${h.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    // } else {
+    //   return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    // }
   }, [todo.endTime, now]);
 
   const handleTimeChange = (val: string) => {
@@ -359,6 +353,7 @@ const SortableTodoItem: React.FC<SortableItemProps> = (props) => {
       attributes={attributes}
       listeners={listeners}
       isDragging={isDragging}
+      now={props.now}
     />
   );
 };
@@ -644,6 +639,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
     const saved = localStorage.getItem('chronos-week-starts-on');
     return saved ? parseInt(saved, 10) : 1;
   });
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleUpdateWeekStartsOn = (val: number) => {
     setWeekStartsOn(val);
@@ -934,6 +935,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                     onSaveEdit={saveEdit}
                     onStartTracking={onStartTracking}
                     isActive={activeTodoId === todo.id}
+                    now={now}
                   />
                 );
               })}
@@ -951,6 +953,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                   onSaveEdit={() => { }}
                   onStartTracking={() => { }}
                   isActive={activeTodoId === activeTodo.id}
+                  now={now}
                 />
               ) : null}
             </DragOverlay>
