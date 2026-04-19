@@ -105,3 +105,14 @@ export function percentageToTime(percentage: number): string | undefined {
   const minutes = totalMinutes % 60;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
+
+export function formatTime12h(time: string): string {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return time;
+  let hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+}

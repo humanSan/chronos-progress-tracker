@@ -24,7 +24,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Todo, DayTodos } from '../types';
-import { timeToPercentage } from '../utils/timeUtils';
+import { timeToPercentage, formatTime12h } from '../utils/timeUtils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,15 +56,6 @@ function pxToTime(px: number): string {
   return `${h.toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;
 }
 
-function formatTimeDisplay(t: string): string {
-  const [hStr, mStr] = t.split(':');
-  let h = parseInt(hStr);
-  const m = mStr || '00';
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  if (h === 0) h = 12;
-  else if (h > 12) h -= 12;
-  return `${h}:${m} ${ampm}`;
-}
 
 function formatDuration(startMin: number, endMin: number): string {
   const duration = endMin - startMin;
@@ -170,7 +161,7 @@ const EventCard: React.FC<{
   const top = minutesToPx(startMin) + 1;
   const height = Math.max(minutesToPx(endMin - startMin), 15) - 2; // min height 15px
   const isSmall = height <= 35;
-  const timeRange = `${formatTimeDisplay(todo.startTime || '0:00')} – ${formatTimeDisplay(todo.endTime || pxToTime(minutesToPx(endMin)))}`;
+  const timeRange = `${formatTime12h(todo.startTime || '0:00')} – ${formatTime12h(todo.endTime || pxToTime(minutesToPx(endMin)))}`;
   const durationStr = `(${formatDuration(startMin, endMin)})`;
   const fullTimeDisplay = `${timeRange} ${durationStr}`;
 
