@@ -124,16 +124,16 @@ const TodoItem: React.FC<TodoItemProps> = ({
   }, [todo, date]);
 
   useEffect(() => {
-    if (isActive && todo.endTime) {
+    if (todo.endTime) {
       const interval = setInterval(() => {
         setNow(new Date());
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [isActive, todo.endTime]);
+  }, [todo.endTime]);
 
   const countdown = useMemo(() => {
-    if (!isActive || !todo.endTime) return null;
+    if (!todo.endTime) return null;
 
     const [hours, minutes] = todo.endTime.split(':').map(Number);
     const [year, month, day] = date.split('-').map(Number);
@@ -152,7 +152,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
     } else {
       return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
-  }, [isActive, todo.endTime, now]);
+  }, [todo.endTime, now]);
 
   const handleTimeChange = (val: string) => {
     setEditTime(val);
@@ -316,8 +316,8 @@ const TodoItem: React.FC<TodoItemProps> = ({
           </div>
         )}
 
-        {isActive && countdown && (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#D93D42]  text-white">
+        {countdown && !todo.completed && (
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-lg transition-colors duration-500 ${isActive ? 'bg-[#D93D42] text-white' : 'bg-white/5 text-[#D93D42]'}`}>
             <div className="text-[14px] font-mono font-bold">
               {countdown}
             </div>
