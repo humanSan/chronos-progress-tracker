@@ -73,7 +73,7 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="relative group bg-[#1A1A1A] p-4 rounded-2xl border border-white/5 shadow-xl overflow-hidden"
+      className="relative group bg-[#1A1A1A] p-4 rounded-2xl border border-white/5 shadow-xl overflow-hidden flex flex-col"
     >
       <div className="flex justify-between items-start mb-3">
         <div>
@@ -104,6 +104,7 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
         </div>
       </div>
 
+      <div className="mt-auto">
       <div className="flex items-baseline gap-0.5 mb-3">
         {mainValue !== null ? (
           <>
@@ -136,6 +137,7 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
             boxShadow: `0 0 6px ${tracker.color}40`
           }}
         />
+      </div>
       </div>
     </motion.div>
   );
