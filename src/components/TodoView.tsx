@@ -19,8 +19,7 @@ import {
   Circle,
   Clock,
   CheckSquare,
-  X,
-  Settings
+  X
 } from 'lucide-react';
 // import CircleCheckCutout from "../assets/circle-check-cutout.svg?react";
 import CheckCircleCutout from '../assets/CheckCircleCutout';
@@ -60,6 +59,10 @@ interface TodoViewProps {
   trackers: Tracker[];
   onDeleteTracker: (id: string) => void;
   onEditTracker: (tracker: Tracker) => void;
+  weekStartsOn: number;
+  onUpdateWeekStartsOn: (val: number) => void;
+  countdownMode: 'off' | 'time' | 'percent';
+  onUpdateCountdownMode: (val: 'off' | 'time' | 'percent') => void;
 }
 
 interface SortableItemProps {
@@ -364,107 +367,6 @@ const SortableTodoItem: React.FC<SortableItemProps> = (props) => {
 };
 
 
-
-interface TodoSettingsModalProps {
-  weekStartsOn: number;
-  onUpdate: (val: number) => void;
-  countdownMode: 'off' | 'time' | 'percent';
-  onUpdateCountdownMode: (val: 'off' | 'time' | 'percent') => void;
-  onClose: () => void;
-}
-
-const TodoSettingsModal: React.FC<TodoSettingsModalProps> = ({
-  weekStartsOn,
-  onUpdate,
-  countdownMode,
-  onUpdateCountdownMode,
-  onClose
-}) => {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  return (
-    <motion.div
-      ref={overlayRef}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0, y: 10 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.95, opacity: 0, y: 10 }}
-        className="w-[360px] bg-[#1A1A1A] border border-[var(--accent2)]/30 rounded-3xl p-6 shadow-2xl relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all"
-        >
-          <X size={16} />
-        </button>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-xl bg-white/5 text-[var(--accent2)]">
-            <Settings size={20} />
-          </div>
-          <div>
-            <h2 className="text-white font-bold text-lg">Todo Settings</h2>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          <div>
-            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">First Day of Week</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => onUpdate(0)}
-                className={`py-2 rounded-xl text-sm font-bold transition-all ${weekStartsOn === 0 ? 'bg-[var(--accent2)] text-black' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'}`}
-              >
-                Sunday
-              </button>
-              <button
-                onClick={() => onUpdate(1)}
-                className={`py-2 rounded-xl text-sm font-bold transition-all ${weekStartsOn === 1 ? 'bg-[var(--accent2)] text-black' : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'}`}
-              >
-                Monday
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-white/40 uppercase tracking-widest mb-2">Deadline Countdown</label>
-            <div className="grid grid-cols-3 gap-2 bg-neutral-900/50 p-1 rounded-2xl border border-white/5">
-              {(['off', 'time', 'percent'] as const).map((mode) => {
-                const label = mode === 'off' ? 'Off' : mode === 'time' ? 'Time Left' : 'Percent Left';
-                const isActive = countdownMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    onClick={() => onUpdateCountdownMode(mode)}
-                    className={`py-2 rounded-xl text-xs font-bold transition-all relative ${isActive
-                      ? 'bg-[var(--accent2)] text-black shadow-lg shadow-[var(--accent2)]/10'
-                      : 'text-white/60 hover:text-white hover:bg-white/5'
-                      }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
 // ─── TodoView ────────────────────────────────────────────────────────────────
 export const TodoView: React.FC<TodoViewProps> = ({
   dayTodos,
@@ -475,7 +377,11 @@ export const TodoView: React.FC<TodoViewProps> = ({
   onToggleTodo,
   trackers,
   onDeleteTracker,
-  onEditTracker
+  onEditTracker,
+  weekStartsOn,
+  onUpdateWeekStartsOn,
+  countdownMode,
+  onUpdateCountdownMode,
 }) => {
   const orderedTrackers = useMemo(() => {
     const dayTracker = trackers.find(t => t.type === 'day');
@@ -490,31 +396,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const [newTodoTime, setNewTodoTime] = useState('');
   const [newTodoPercent, setNewTodoPercent] = useState<string>('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [countdownMode, setCountdownMode] = useState<'off' | 'time' | 'percent'>(() => {
-    const saved = localStorage.getItem('dun-countdown-mode');
-    return (saved as 'off' | 'time' | 'percent') || 'off';
-  });
-  const [weekStartsOn, setWeekStartsOn] = useState<number>(() => {
-    const saved = localStorage.getItem('dun-week-starts-on');
-    return saved ? parseInt(saved, 10) : 1;
-  });
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleUpdateWeekStartsOn = (val: number) => {
-    setWeekStartsOn(val);
-    localStorage.setItem('dun-week-starts-on', val.toString());
-  };
-
-  const handleUpdateCountdownMode = (val: 'off' | 'time' | 'percent') => {
-    setCountdownMode(val);
-    localStorage.setItem('dun-countdown-mode', val);
-  };
 
   const handleNewTimeChange = (val: string) => {
     setNewTodoTime(val);
@@ -858,29 +745,6 @@ export const TodoView: React.FC<TodoViewProps> = ({
         </div>
       </div>
 
-      {/* Settings Modal */}
-      <AnimatePresence>
-        {showSettings && (
-          <TodoSettingsModal
-            weekStartsOn={weekStartsOn}
-            onUpdate={handleUpdateWeekStartsOn}
-            countdownMode={countdownMode}
-            onUpdateCountdownMode={handleUpdateCountdownMode}
-            onClose={() => setShowSettings(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Floating Settings Button */}
-      <div className="fixed bottom-6 right-6 z-40">
-        <button
-          onClick={() => setShowSettings(true)}
-          className="p-3 bg-[#1A1A1A] hover:bg-[#252525] border border-white/10 text-white/60 hover:text-white rounded-full shadow-lg transition-all"
-          title="Todo Settings"
-        >
-          <Settings size={20} />
-        </button>
-      </div>
     </div>
   );
 };

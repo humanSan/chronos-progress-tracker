@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Clock, LayoutGrid, List, Maximize2, Minimize2, Palette } from 'lucide-react';
+import { Plus, Clock, LayoutGrid, List, Maximize2, Minimize2 } from 'lucide-react';
 import { Tracker, Theme, DayTodos, Todo } from './types';
 import { TrackerCard } from './components/TrackerCard';
 import { AddTrackerModal } from './components/AddTrackerModal';
-import { ThemeSettingsModal } from './components/ThemeSettingsModal';
+import { SettingsModal } from './components/SettingsModal';
 import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
@@ -39,8 +39,16 @@ export default function App() {
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [weekStartsOn, setWeekStartsOn] = useState<number>(() => {
+    const saved = localStorage.getItem('dun-week-starts-on');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+  const [countdownMode, setCountdownMode] = useState<'off' | 'time' | 'percent'>(() => {
+    const saved = localStorage.getItem('dun-countdown-mode');
+    return (saved as 'off' | 'time' | 'percent') || 'off';
+  });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     // TODO(neon-auth): replace with Neon Auth session check
     return localStorage.getItem('dun-auth-stub') === 'true';
@@ -77,6 +85,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dun-trackers', JSON.stringify(trackers));
   }, [trackers]);
+
+  useEffect(() => {
+    localStorage.setItem('dun-week-starts-on', weekStartsOn.toString());
+  }, [weekStartsOn]);
+
+  useEffect(() => {
+    localStorage.setItem('dun-countdown-mode', countdownMode);
+  }, [countdownMode]);
 
   useEffect(() => {
     localStorage.setItem('dun-todos', JSON.stringify(dayTodos));
@@ -201,6 +217,7 @@ export default function App() {
         isVisible={!isFullscreen}
         isAuthenticated={isAuthenticated}
         onAccountClick={() => setIsAuthModalOpen(true)}
+        onSettingsClick={() => setIsSettingsModalOpen(true)}
       />
 
       <div className={`transition-all duration-500 ${!isFullscreen ? 'pl-20' : 'pl-0'}`}>
@@ -240,14 +257,6 @@ export default function App() {
                       </button>
                     </div>
                   )}
-
-                  <button
-                    onClick={() => setIsThemeModalOpen(true)}
-                    className="p-2.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl transition-all"
-                    title="Theme Settings"
-                  >
-                    <Palette size={18} />
-                  </button>
 
                   <button
                     onClick={() => setIsFullscreen(true)}
@@ -369,6 +378,10 @@ export default function App() {
                   trackers={trackers}
                   onDeleteTracker={handleDeleteTracker}
                   onEditTracker={handleEditTracker}
+                  weekStartsOn={weekStartsOn}
+                  onUpdateWeekStartsOn={setWeekStartsOn}
+                  countdownMode={countdownMode}
+                  onUpdateCountdownMode={setCountdownMode}
                 />
               </motion.div>
             ) : (
@@ -399,11 +412,15 @@ export default function App() {
         editingTracker={editingTracker}
       />
 
-      <ThemeSettingsModal
-        isOpen={isThemeModalOpen}
-        onClose={() => setIsThemeModalOpen(false)}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        weekStartsOn={weekStartsOn}
+        onUpdateWeekStartsOn={setWeekStartsOn}
+        countdownMode={countdownMode}
+        onUpdateCountdownMode={setCountdownMode}
         theme={theme}
-        onUpdate={setTheme}
+        onUpdateTheme={setTheme}
       />
 
       <AuthModal

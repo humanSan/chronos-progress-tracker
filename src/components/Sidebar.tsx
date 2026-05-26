@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckSquare, Calendar, User } from 'lucide-react';
+import { Clock, CheckSquare, Calendar, User, Settings } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -8,9 +8,10 @@ interface SidebarProps {
   isVisible: boolean;
   isAuthenticated: boolean;
   onAccountClick: () => void;
+  onSettingsClick: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVisible, isAuthenticated, onAccountClick }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVisible, isAuthenticated, onAccountClick, onSettingsClick }) => {
   if (!isVisible) return null;
 
   const items = [
@@ -53,6 +54,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
       </div>
 
       <div className="flex flex-col gap-6">
+        <button
+          onClick={onSettingsClick}
+          className="group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all bg-white/5 text-white/40 hover:bg-white/10 hover:text-white"
+          title="Settings"
+        >
+          <Settings size={22} strokeWidth={2.5} />
+        </button>
         <button
           onClick={onAccountClick}
           className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
