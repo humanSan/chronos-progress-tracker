@@ -244,7 +244,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
 
       <button
         onClick={() => onToggle(todo.id)}
-        className="relative cursor-pointer"
+        className="relative cursor-pointer py-1"
       >
         <motion.div
           animate={todo.completed ? { scale: [1, 1.2, 1], rotate: [0, 10, 0] } : {}}
@@ -283,7 +283,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
                 : 'bg-white/5 shadow-none hover:bg-white/10'
               }`}>
             {todo.endTime && (
-              <div className={`flex items-center gap-1.5 text-sm font-mono font-bold transition-colors duration-500 ${todo.completed
+              <div className={`flex items-center gap-1.5 text-sm font-mono font-medium transition-colors duration-500 ${todo.completed
                 ? 'text-white/20'
                 : isActive
                   ? 'text-black'
@@ -302,7 +302,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
                 }`} />
             )}
             {todo.percentageGoal !== undefined && (
-              <div className={`text-sm font-mono font-bold transition-colors duration-500 ${todo.completed
+              <div className={`text-sm font-mono font-medium transition-colors duration-500 ${todo.completed
                 ? 'text-white/20'
                 : isActive
                   ? 'text-black'
@@ -759,7 +759,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
           {!isAdding ? (
             <button
               onClick={() => setIsAdding(true)}
-              className="flex items-center gap-3 py-1 text-white/25 hover:text-white/50 transition-all group"
+              className="flex items-center gap-3 py-2 text-white/25 hover:text-white/50 transition-all group"
             >
               <GripVertical size={18} className="invisible" />
               <Plus size={24} strokeWidth={2.5} />
