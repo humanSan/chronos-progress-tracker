@@ -1,6 +1,7 @@
 export type TrackerType = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 export type TrackerDisplayMode = 'percent_elapsed' | 'percent_remaining' | 'time_elapsed' | 'time_remaining';
+export type TrackerSecondaryDisplayMode = TrackerDisplayMode | 'none';
 
 export interface Tracker {
   id: string;
@@ -10,7 +11,8 @@ export interface Tracker {
   endDate?: string;   // ISO string for custom
   color: string;      // Hex color
   precision: number;  // Number of decimal places
-  displayMode?: TrackerDisplayMode; // What the main value shows
+  displayMode?: TrackerDisplayMode;
+  secondaryDisplayMode?: TrackerSecondaryDisplayMode;
   createdAt: number;
 }
 

@@ -257,8 +257,8 @@ const TodoItem: React.FC<TodoItemProps> = ({
       >
         <motion.div
           animate={todo.completed ? { scale: [1.2, 1], rotate: [10, 0] } : {}}
-          transition={{ duration: 0.25 }}
-          className={`transition-colors ${todo.completed ? 'text-[var(--accent1)]' : 'text-white hover:text-[var(--accent1)]'}`}
+          transition={{ duration: 0.3 }}
+          className={`transition-colors duration-100 ${todo.completed ? 'text-[var(--accent1)]' : 'text-white/50 hover:text-white'}`}
         >
           {todo.completed ? <CheckCircleCutout size={21} strokeWidth={2.5} /> : <Circle size={21} strokeWidth={2.5} />}
         </motion.div>
@@ -760,7 +760,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
           {!isAdding ? (
             <button
               onClick={() => setIsAdding(true)}
-              className="flex items-center gap-2 py-2 text-white/25 hover:text-white/50 transition-all group"
+              className="flex items-center gap-2 py-2 text-white/25 hover:text-white/50 transition-all group duration-100"
             >
               <GripVertical size={18} className="invisible" />
               <Plus size={21} strokeWidth={2.5} />

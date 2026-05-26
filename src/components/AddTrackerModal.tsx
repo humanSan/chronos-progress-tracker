@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { format } from 'date-fns';
-import { Tracker, TrackerType, TrackerDisplayMode } from '../types';
+import { Tracker, TrackerType, TrackerDisplayMode, TrackerSecondaryDisplayMode } from '../types';
 
 interface AddTrackerModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
   const [color, setColor] = useState(editingTracker?.color || '#e9ec6a');
   const [precision, setPrecision] = useState(editingTracker?.precision || 2);
   const [displayMode, setDisplayMode] = useState<TrackerDisplayMode>(editingTracker?.displayMode || 'percent_elapsed');
+  const [secondaryDisplayMode, setSecondaryDisplayMode] = useState<TrackerSecondaryDisplayMode>(editingTracker?.secondaryDisplayMode ?? 'time_remaining');
 
   useEffect(() => {
     if (isOpen) {
@@ -29,6 +30,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
       setColor(editingTracker?.color || '#e9ec6a');
       setPrecision(editingTracker?.precision || 2);
       setDisplayMode(editingTracker?.displayMode || 'percent_elapsed');
+      setSecondaryDisplayMode(editingTracker?.secondaryDisplayMode ?? 'time_remaining');
     }
   }, [isOpen, editingTracker]);
 
@@ -43,6 +45,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
       color,
       precision,
       displayMode,
+      secondaryDisplayMode,
       createdAt: editingTracker?.createdAt || Date.now()
     });
     onClose();
@@ -162,7 +165,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Display Value</label>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Primary Value</label>
                   <div className="grid grid-cols-2 gap-2">
                     {([
                       { key: 'percent_elapsed' as TrackerDisplayMode, label: '% Elapsed' },
@@ -176,6 +179,32 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                         onClick={() => setDisplayMode(opt.key)}
                         className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                           displayMode === opt.key
+                            ? 'bg-[var(--accent1)] text-black'
+                            : 'bg-white/5 text-white/60 hover:bg-white/10'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Secondary Value</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: 'percent_elapsed' as TrackerSecondaryDisplayMode, label: '% Elapsed' },
+                      { key: 'percent_remaining' as TrackerSecondaryDisplayMode, label: '% Remaining' },
+                      { key: 'time_elapsed' as TrackerSecondaryDisplayMode, label: 'Time Elapsed' },
+                      { key: 'time_remaining' as TrackerSecondaryDisplayMode, label: 'Time Left' },
+                      { key: 'none' as TrackerSecondaryDisplayMode, label: 'None' },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setSecondaryDisplayMode(opt.key)}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                          secondaryDisplayMode === opt.key
                             ? 'bg-[var(--accent1)] text-black'
                             : 'bg-white/5 text-white/60 hover:bg-white/10'
                         }`}

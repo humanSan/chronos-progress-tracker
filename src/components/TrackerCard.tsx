@@ -21,49 +21,40 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
   const data = calculateProgress(tracker, now);
   const mode: TrackerDisplayMode = tracker.displayMode || 'percent_elapsed';
 
-  const { mainValue, mainSuffix, secondaryText } = useMemo(() => {
+  const { mainValue, mainSuffix } = useMemo(() => {
     switch (mode) {
       case 'percent_elapsed': {
         const str = data.percentage.toFixed(tracker.precision);
         const [w, d] = str.split('.');
-        return {
-          mainValue: w,
-          mainSuffix: d ? `.${d}%` : '%',
-          secondaryText: data.timeLeft,
-        };
+        return { mainValue: w, mainSuffix: d ? `.${d}%` : '%' };
       }
       case 'percent_remaining': {
         const str = data.percentRemaining.toFixed(tracker.precision);
         const [w, d] = str.split('.');
-        return {
-          mainValue: w,
-          mainSuffix: d ? `.${d}%` : '%',
-          secondaryText: data.timeLeft,
-        };
+        return { mainValue: w, mainSuffix: d ? `.${d}%` : '%' };
       }
       case 'time_remaining':
-        return {
-          mainValue: null,
-          mainSuffix: null,
-          secondaryText: `${data.percentage.toFixed(tracker.precision)}% elapsed`,
-        };
+        return { mainValue: null, mainSuffix: null };
       case 'time_elapsed':
-        return {
-          mainValue: null,
-          mainSuffix: null,
-          secondaryText: `${data.percentage.toFixed(tracker.precision)}% elapsed`,
-        };
+        return { mainValue: null, mainSuffix: null };
       default: {
         const str = data.percentage.toFixed(tracker.precision);
         const [w, d] = str.split('.');
-        return {
-          mainValue: w,
-          mainSuffix: d ? `.${d}%` : '%',
-          secondaryText: data.timeLeft,
-        };
+        return { mainValue: w, mainSuffix: d ? `.${d}%` : '%' };
       }
     }
   }, [mode, data, tracker.precision]);
+
+  const secondaryMode = tracker.secondaryDisplayMode ?? 'time_remaining';
+  const secondaryText = useMemo(() => {
+    switch (secondaryMode) {
+      case 'percent_elapsed':   return `${data.percentage.toFixed(tracker.precision)}% elapsed`;
+      case 'percent_remaining': return `${data.percentRemaining.toFixed(tracker.precision)}% remaining`;
+      case 'time_elapsed':      return data.timeElapsed;
+      case 'time_remaining':    return data.timeLeft;
+      case 'none':              return null;
+    }
+  }, [secondaryMode, data, tracker.precision]);
 
   const dayOfMonth = now.getDate();
 
@@ -83,9 +74,11 @@ export const TrackerCard: React.FC<TrackerCardProps> = ({ tracker, onDelete, onE
           <p className="text-white/40 text-[10px] font-medium">
             {data.subLabel}
           </p>
-          <p className="text-[var(--accent2)] text-[10px] font-medium mt-0.5">
-            {mode === 'time_remaining' ? data.timeLeft : mode === 'time_elapsed' ? data.timeElapsed : data.timeLeft}
-          </p>
+          {secondaryText && (
+            <p className="text-[var(--accent2)] text-[10px] font-medium mt-0.5">
+              {secondaryText}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
