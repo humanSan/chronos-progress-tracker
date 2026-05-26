@@ -88,8 +88,8 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={() => {
-                    setAccent1('#A3E635');
-                    setAccent2('#67E8F9');
+                    setAccent1('#e9ec6a');
+                    setAccent2('#a2beb7');
                   }}
                   className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 font-bold py-4 rounded-2xl transition-all"
                 >

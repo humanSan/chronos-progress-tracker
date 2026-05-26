@@ -5,6 +5,7 @@ import { Tracker, Theme, DayTodos, Todo } from './types';
 import { TrackerCard } from './components/TrackerCard';
 import { AddTrackerModal } from './components/AddTrackerModal';
 import { ThemeSettingsModal } from './components/ThemeSettingsModal';
+import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
 import { CalendarView } from './components/CalendarView';
@@ -15,7 +16,7 @@ const DEFAULT_TRACKERS: Tracker[] = [
     id: 'day-default',
     name: 'Day',
     type: 'day',
-    color: '#A3E635',
+    color: '#e9ec6a',
     precision: 2,
     createdAt: Date.now(),
   },
@@ -23,7 +24,7 @@ const DEFAULT_TRACKERS: Tracker[] = [
     id: 'year-default',
     name: 'Year',
     type: 'year',
-    color: '#67E8F9',
+    color: '#a2beb7',
     precision: 3,
     createdAt: Date.now() + 1,
   }
@@ -31,7 +32,7 @@ const DEFAULT_TRACKERS: Tracker[] = [
 
 export default function App() {
   const [trackers, setTrackers] = useState<Tracker[]>(() => {
-    const saved = localStorage.getItem('chronos-trackers');
+    const saved = localStorage.getItem('dun-trackers');
     return saved ? JSON.parse(saved) : DEFAULT_TRACKERS;
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,21 +40,26 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // TODO(neon-auth): replace with Neon Auth session check
+    return localStorage.getItem('dun-auth-stub') === 'true';
+  });
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('chronos-theme');
-    return saved ? JSON.parse(saved) : { accent1: '#A3E635', accent2: '#67E8F9' };
+    const saved = localStorage.getItem('dun-theme');
+    return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
   });
   const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'calendar'>('todos');
   const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
-    const saved = localStorage.getItem('chronos-todos');
+    const saved = localStorage.getItem('dun-todos');
     return saved ? JSON.parse(saved) : [];
   });
   const [activeTodoId, setActiveTodoId] = useState<string | null>(() => {
-    return localStorage.getItem('chronos-active-todo');
+    return localStorage.getItem('dun-active-todo');
   });
 
   useEffect(() => {
-    localStorage.setItem('chronos-theme', JSON.stringify(theme));
+    localStorage.setItem('dun-theme', JSON.stringify(theme));
     document.documentElement.style.setProperty('--accent1', theme.accent1);
     document.documentElement.style.setProperty('--accent2', theme.accent2);
   }, [theme]);
@@ -69,18 +75,18 @@ export default function App() {
   }, [isFullscreen]);
 
   useEffect(() => {
-    localStorage.setItem('chronos-trackers', JSON.stringify(trackers));
+    localStorage.setItem('dun-trackers', JSON.stringify(trackers));
   }, [trackers]);
 
   useEffect(() => {
-    localStorage.setItem('chronos-todos', JSON.stringify(dayTodos));
+    localStorage.setItem('dun-todos', JSON.stringify(dayTodos));
   }, [dayTodos]);
 
   useEffect(() => {
     if (activeTodoId) {
-      localStorage.setItem('chronos-active-todo', activeTodoId);
+      localStorage.setItem('dun-active-todo', activeTodoId);
     } else {
-      localStorage.removeItem('chronos-active-todo');
+      localStorage.removeItem('dun-active-todo');
     }
   }, [activeTodoId]);
 
@@ -193,6 +199,8 @@ export default function App() {
         activeView={activeView}
         onViewChange={handleViewChange}
         isVisible={!isFullscreen}
+        isAuthenticated={isAuthenticated}
+        onAccountClick={() => setIsAuthModalOpen(true)}
       />
 
       <div className={`transition-all duration-500 ${!isFullscreen ? 'pl-20' : 'pl-0'}`}>
@@ -210,14 +218,9 @@ export default function App() {
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-black transition-colors ${activeView === 'trackers' ? 'bg-[var(--accent1)]' : 'bg-[var(--accent2)]'}`}>
                     {activeView === 'trackers' ? <Clock size={24} strokeWidth={2.5} /> : <Plus size={24} strokeWidth={2.5} />}
                   </div>
-                  <div>
-                    <h1 className="text-xl font-bold tracking-tight">
-                      {activeView === 'trackers' ? 'Chronos' : 'Objectives'}
-                    </h1>
-                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">
-                      {activeView === 'trackers' ? 'Progress Dashboard' : 'Daily Time Goals'}
-                    </p>
-                  </div>
+                  <h1 className="text-xl font-bold tracking-tight leading-none">
+                    {activeView === 'trackers' ? 'Dunzo' : 'Objectives'}
+                  </h1>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -401,6 +404,17 @@ export default function App() {
         onClose={() => setIsThemeModalOpen(false)}
         theme={theme}
         onUpdate={setTheme}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthenticated={() => {
+          // TODO(neon-auth): replace with real session persistence from Neon Auth
+          localStorage.setItem('dun-auth-stub', 'true');
+          setIsAuthenticated(true);
+          setIsAuthModalOpen(false);
+        }}
       />
 
       {/* Footer Decoration */}

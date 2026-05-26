@@ -1,14 +1,16 @@
 import React from 'react';
-import { Clock, CheckSquare, Calendar } from 'lucide-react';
+import { Clock, CheckSquare, Calendar, User } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
   activeView: 'trackers' | 'todos' | 'calendar';
   onViewChange: (view: 'trackers' | 'todos' | 'calendar') => void;
   isVisible: boolean;
+  isAuthenticated: boolean;
+  onAccountClick: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVisible }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVisible, isAuthenticated, onAccountClick }) => {
   if (!isVisible) return null;
 
   const items = [
@@ -18,10 +20,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
   ];
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="fixed left-0 top-0 bottom-0 w-20 bg-[#111] border-r border-white/5 flex flex-col items-center py-8 z-50"
+      className="fixed left-0 top-0 bottom-0 w-20 bg-[#111] border-r border-white/5 flex flex-col items-center justify-between py-8 z-50"
     >
       <div className="flex flex-col gap-6">
         {items.map((item) => {
@@ -32,15 +34,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
               key={item.key}
               onClick={() => onViewChange(item.key)}
               className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                isActive 
-                  ? `bg-[var(${item.color})] text-black shadow-lg shadow-[var(${item.color})]/20` 
+                isActive
+                  ? `bg-[var(${item.color})] text-black shadow-lg shadow-[var(${item.color})]/20`
                   : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
               }`}
               title={item.title}
             >
               <Icon size={22} strokeWidth={2.5} />
               {isActive && (
-                <motion.div 
+                <motion.div
                   layoutId="sidebar-active"
                   className={`absolute -left-4 w-1 h-6 bg-[var(${item.color})] rounded-r-full`}
                 />
@@ -48,6 +50,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
             </button>
           );
         })}
+      </div>
+
+      <div className="flex flex-col gap-6">
+        <button
+          onClick={onAccountClick}
+          className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+            isAuthenticated
+              ? 'bg-[var(--accent1)] text-black shadow-lg shadow-[var(--accent1)]/20'
+              : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
+          }`}
+          title={isAuthenticated ? 'Account' : 'Sign In'}
+        >
+          <User size={22} strokeWidth={2.5} />
+        </button>
       </div>
     </motion.div>
   );

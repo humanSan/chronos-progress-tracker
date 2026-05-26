@@ -22,6 +22,8 @@ import {
   X,
   Settings
 } from 'lucide-react';
+// import CircleCheckCutout from "../assets/circle-check-cutout.svg?react";
+import CheckCircleCutout from '../assets/CheckCircleCutout';
 import {
   DndContext,
   closestCorners,
@@ -231,9 +233,16 @@ const TodoItem: React.FC<TodoItemProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex items-center gap-3 py-1 border-b border-white/5 ${isDragging ? 'opacity-0' : ''
+      className={`relative group flex items-center gap-2 py-1 border-b border-white/5 ${isDragging ? 'opacity-0' : ''
         }`}
     >
+      {/* {todo.completed && (
+        <motion.div
+          animate={{ opacity: [0, 0.2, 0] }}
+          transition={{ duration: 0.2 }}
+          className="absolute inset-0 bg-(--accent1) pointer-events-none"
+        />
+      )} */}
       <button
         {...attributes}
         {...listeners}
@@ -247,20 +256,12 @@ const TodoItem: React.FC<TodoItemProps> = ({
         className="relative cursor-pointer py-1"
       >
         <motion.div
-          animate={todo.completed ? { scale: [1, 1.2, 1], rotate: [0, 10, 0] } : {}}
-          transition={{ duration: 0.3 }}
+          animate={todo.completed ? { scale: [1.2, 1], rotate: [10, 0] } : {}}
+          transition={{ duration: 0.25 }}
           className={`transition-colors ${todo.completed ? 'text-[var(--accent1)]' : 'text-white hover:text-[var(--accent1)]'}`}
         >
-          {todo.completed ? <CheckCircle2 size={24} /> : <Circle size={24} strokeWidth={2.5} />}
+          {todo.completed ? <CheckCircleCutout size={21} strokeWidth={2.5} /> : <Circle size={21} strokeWidth={2.5} />}
         </motion.div>
-        {todo.completed && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1.5, opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0 bg-[var(--accent1)] rounded-full"
-          />
-        )}
       </button>
 
       <div className="flex-1 min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
@@ -491,11 +492,11 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [countdownMode, setCountdownMode] = useState<'off' | 'time' | 'percent'>(() => {
-    const saved = localStorage.getItem('chronos-countdown-mode');
+    const saved = localStorage.getItem('dun-countdown-mode');
     return (saved as 'off' | 'time' | 'percent') || 'off';
   });
   const [weekStartsOn, setWeekStartsOn] = useState<number>(() => {
-    const saved = localStorage.getItem('chronos-week-starts-on');
+    const saved = localStorage.getItem('dun-week-starts-on');
     return saved ? parseInt(saved, 10) : 1;
   });
   const [now, setNow] = useState(new Date());
@@ -507,12 +508,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
   const handleUpdateWeekStartsOn = (val: number) => {
     setWeekStartsOn(val);
-    localStorage.setItem('chronos-week-starts-on', val.toString());
+    localStorage.setItem('dun-week-starts-on', val.toString());
   };
 
   const handleUpdateCountdownMode = (val: 'off' | 'time' | 'percent') => {
     setCountdownMode(val);
-    localStorage.setItem('chronos-countdown-mode', val);
+    localStorage.setItem('dun-countdown-mode', val);
   };
 
   const handleNewTimeChange = (val: string) => {
@@ -759,10 +760,10 @@ export const TodoView: React.FC<TodoViewProps> = ({
           {!isAdding ? (
             <button
               onClick={() => setIsAdding(true)}
-              className="flex items-center gap-3 py-2 text-white/25 hover:text-white/50 transition-all group"
+              className="flex items-center gap-2 py-2 text-white/25 hover:text-white/50 transition-all group"
             >
               <GripVertical size={18} className="invisible" />
-              <Plus size={24} strokeWidth={2.5} />
+              <Plus size={21} strokeWidth={2.5} />
               <span className="text-md font-medium">Add a todo</span>
             </button>
           ) : (

@@ -15,8 +15,8 @@ export interface Tracker {
 }
 
 export interface Theme {
-  accent1: string; // Primary accent (e.g. #A3E635)
-  accent2: string; // Secondary accent (e.g. #67E8F9)
+  accent1: string; // Primary accent (e.g. #e9ec6a)
+  accent2: string; // Secondary accent (e.g. #a2beb7)
 }
 
 export interface Todo {
