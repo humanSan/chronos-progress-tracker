@@ -261,15 +261,15 @@ const TodoItem: React.FC<TodoItemProps> = ({
         <motion.div
           animate={todo.completed ? { scale: [1.3, 1], rotate: [15, 0] } : {}}
           transition={{ duration: 0.3 }}
-          className={`transition-colors duration-100 ${todo.completed ? 'text-[var(--accent1)]' : 'text-white/50 hover:text-white'}`}
+          className={`transition-colors duration-100 ${todo.completed ? 'text-(--accent1)' : 'text-white/50 hover:text-white'}`}
         >
           {todo.completed ? <CheckCircleCutout size={21} strokeWidth={2.5} /> : <Circle size={21} strokeWidth={2.5} />}
         </motion.div>
       </button>
 
       <div className="flex-1 min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
-        <p className={`text-md transition duration-300 font-medium ${todo.completed
-          ? 'text-white/30 line-through translate-x-[2px]'
+        <p className={`text-md transition duration-100 ease-out font-medium ${todo.completed
+          ? 'text-white/25 line-through translate-x-[3px]'
           : 'text-white group-hover/text:text-[var(--accent2)]'
           }`}>
           {todo.text}
