@@ -1,0 +1,359 @@
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { format, parseISO } from 'date-fns';
+import {
+  X,
+  Trash2,
+  Circle,
+  AlignLeft,
+  CalendarDays,
+  Clock,
+  Percent,
+  Tag as TagIcon,
+  Sparkles
+} from 'lucide-react';
+import CheckCircleCutout from '../assets/CheckCircleCutout';
+import { Todo } from '../types';
+import { timeToPercentage, percentageToTime } from '../utils/timeUtils';
+
+interface TodoFullViewProps {
+  todo: Todo;
+  date: string; // YYYY-MM-DD the todo currently lives on
+  allTags: string[]; // every tag used across all todos, for autocomplete
+  onClose: () => void;
+  onSave: (updated: Todo, newDate: string) => void;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+// Reusable labelled property row (left icon + label, right control).
+// `noDivider` omits the bottom border so related rows can be visually grouped.
+const PropertyRow: React.FC<{
+  icon: React.ReactNode;
+  label?: string;
+  children: React.ReactNode;
+  noDivider?: boolean;
+  pad?: string; // override default vertical padding (e.g. to tighten grouped rows)
+}> = ({ icon, label, children, noDivider, pad = 'py-3' }) => (
+  <div className={`flex items-start gap-3 ${pad} ${noDivider ? '' : 'border-b border-white/5'}`}>
+    <div className="flex items-center gap-2 w-28 shrink-0 pt-1.5 text-white/40 text-[10px] font-bold uppercase tracking-widest">
+      {icon}
+      {label}
+    </div>
+    <div className="flex-1 min-w-0">{children}</div>
+  </div>
+);
+
+export const TodoFullView: React.FC<TodoFullViewProps> = ({
+  todo,
+  date,
+  allTags,
+  onClose,
+  onSave,
+  onToggle,
+  onDelete
+}) => {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  // Local draft — synced only when switching to a different todo
+  const [draft, setDraft] = useState<Todo>(todo);
+  const [dateStr, setDateStr] = useState(date);
+  const [tagInput, setTagInput] = useState('');
+  const [tagFocused, setTagFocused] = useState(false);
+
+  // Auto-size the notes textarea: a roomy default height, growing with content
+  // and capping at ~7 lines before it becomes scrollable.
+  const NOTES_MIN_HEIGHT = 104; // px, default ~4-5 lines so the panel feels open
+  const NOTES_MAX_HEIGHT = 176; // px, roughly 7 lines at this font/line-height
+  const resizeNotes = () => {
+    const el = notesRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, NOTES_MIN_HEIGHT), NOTES_MAX_HEIGHT);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > NOTES_MAX_HEIGHT ? 'auto' : 'hidden';
+  };
+
+  // Re-measure when the notes value changes or a different todo opens.
+  useLayoutEffect(resizeNotes, [draft.notes, todo.id]);
+
+  useEffect(() => {
+    setDraft(todo);
+    setDateStr(date);
+    setTagInput('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todo.id]);
+
+  // Toggling completion flows through the parent; mirror that one field back
+  // into the draft (without clobbering other in-progress edits) so the panel
+  // reflects the checked state and plays its animation.
+  useEffect(() => {
+    setDraft(prev => prev.completed === todo.completed ? prev : { ...prev, completed: todo.completed });
+  }, [todo.completed]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  // Update draft + persist upward (auto-save, Todoist-style)
+  const update = (patch: Partial<Todo>, nextDate: string = dateStr) => {
+    setDraft(prev => {
+      const next = { ...prev, ...patch };
+      onSave(next, nextDate);
+      return next;
+    });
+  };
+
+  const handleTimeChange = (val: string) => {
+    const p = timeToPercentage(val);
+    update({
+      endTime: val || undefined,
+      ...(p !== undefined ? { percentageGoal: p } : {})
+    });
+  };
+
+  const handlePercentChange = (val: string) => {
+    const num = parseFloat(val);
+    if (val === '') {
+      update({ percentageGoal: undefined });
+      return;
+    }
+    if (!isNaN(num)) {
+      const t = percentageToTime(num);
+      update({ percentageGoal: num, ...(t ? { endTime: t } : {}) });
+    }
+  };
+
+  const handleDateChange = (val: string) => {
+    if (!val) return;
+    setDateStr(val);
+    update({}, val);
+  };
+
+  const addTagValue = (value: string) => {
+    const t = value.trim();
+    if (!t) return;
+    const existing = draft.tags || [];
+    if (!existing.includes(t)) update({ tags: [...existing, t] });
+    setTagInput('');
+  };
+
+  const addTag = () => addTagValue(tagInput);
+
+  const removeTag = (tag: string) => {
+    update({ tags: (draft.tags || []).filter(t => t !== tag) });
+  };
+
+  // Existing tags not yet on this todo, filtered by what's typed.
+  const tagSuggestions = (() => {
+    const current = new Set(draft.tags || []);
+    const q = tagInput.trim().toLowerCase();
+    return allTags
+      .filter(t => !current.has(t))
+      .filter(t => !q || t.toLowerCase().includes(q));
+  })();
+
+  const showTagPopup = tagFocused && (tagSuggestions.length > 0 || tagInput.trim().length > 0);
+
+  const inputClass =
+    'w-full max-w-[200px] bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-sm focus:outline-none focus:border-[var(--accent2)] transition-colors';
+
+  return (
+    <motion.div
+      ref={overlayRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm py-[6vh] px-4 overflow-y-auto"
+    >
+        <motion.div
+          initial={{ scale: 0.97, opacity: 0, y: 12 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.97, opacity: 0, y: 12 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+          className="w-full max-w-[640px] bg-[#1A1A1A] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[88vh]"
+        >
+          {/* ── Top bar ─────────────────────────────────── */}
+          <div className="flex items-center justify-between px-5 h-12 border-b border-white/5 shrink-0">
+            <div className="flex items-center gap-2 text-white/40 text-xs font-semibold">
+              <CalendarDays size={14} />
+              {format(parseISO(dateStr), 'EEE, MMM d')}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { onDelete(draft.id); onClose(); }}
+                title="Delete task"
+                className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-[#d93d42]/10 transition-all"
+              >
+                <Trash2 size={16} />
+              </button>
+              <button
+                onClick={onClose}
+                title="Close"
+                className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* ── Body ────────────────────────────────────── */}
+          <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-5">
+            {/* Title */}
+            <div className="flex items-start gap-3">
+              <button
+                onClick={() => { onToggle(draft.id); }}
+                className="mt-1 shrink-0 cursor-pointer"
+              >
+                <motion.div
+                  animate={draft.completed ? { scale: [1.3, 1], rotate: [15, 0] } : {}}
+                  transition={{ duration: 0.3 }}
+                  className={`transition-colors duration-100 ${draft.completed ? 'text-[var(--accent1)]' : 'text-white/50 hover:text-white'}`}
+                >
+                  {draft.completed
+                    ? <CheckCircleCutout size={22} strokeWidth={2.5} />
+                    : <Circle size={22} strokeWidth={2.5} />}
+                </motion.div>
+              </button>
+              <textarea
+                value={draft.text}
+                onChange={(e) => update({ text: e.target.value })}
+                rows={1}
+                placeholder="Task name"
+                className={`flex-1 bg-transparent resize-none text-xl font-bold focus:outline-none leading-snug pt-0.5 transition duration-200 ease-out placeholder:text-white/20 ${draft.completed ? 'text-white/25 line-through translate-x-[3px]' : 'text-white'}`}
+              />
+            </div>
+
+            {/* Notes / description — auto-grows up to ~6 lines, then scrolls */}
+            <div className="flex items-start gap-3 mt-5 pl-[34px]">
+              <textarea
+                ref={notesRef}
+                value={draft.notes || ''}
+                onChange={(e) => update({ notes: e.target.value })}
+                onInput={resizeNotes}
+                rows={1}
+                placeholder="Add notes…"
+                className="flex-1 bg-transparent resize-none text-sm text-white/80 placeholder:text-white/25 focus:outline-none leading-relaxed overflow-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/25"
+              />
+            </div>
+
+            {/* ── Properties ──────────────────────────── */}
+            <div className="mt-4">
+              <PropertyRow icon={<CalendarDays size={13} />} label="Date">
+                <input
+                  type="date"
+                  value={dateStr}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  style={{ colorScheme: 'dark' }}
+                  className={`${inputClass} font-mono text-xs`}
+                />
+              </PropertyRow>
+
+              <PropertyRow icon={<Clock size={13} />} label="Time" noDivider pad="pt-3 pb-1">
+                <input
+                  type="time"
+                  value={draft.endTime || ''}
+                  onChange={(e) => handleTimeChange(e.target.value)}
+                  style={{ colorScheme: 'dark' }}
+                  className={`${inputClass} font-mono text-xs`}
+                />
+              </PropertyRow>
+
+              <PropertyRow icon={<Percent size={13} />} pad="pt-1 pb-3">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="any"
+                  value={draft.percentageGoal ?? ''}
+                  onChange={(e) => handlePercentChange(e.target.value)}
+                  style={{ colorScheme: 'dark' }}
+                  placeholder="e.g. 50"
+                  className={`${inputClass} font-mono text-xs`}
+                />
+              </PropertyRow>
+
+              <PropertyRow icon={<TagIcon size={13} />} label="Tags">
+                <div className="flex flex-wrap items-center gap-2">
+                  {(draft.tags || []).map(tag => (
+                    <span
+                      key={tag}
+                      className="group/tag flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full bg-[var(--accent2)]/15 text-[var(--accent2)] text-xs font-semibold"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => removeTag(tag)}
+                        className="text-[var(--accent2)]/50 hover:text-[var(--accent2)] transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                  <span className="relative">
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onFocus={() => setTagFocused(true)}
+                      onBlur={() => setTagFocused(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+                        if (e.key === 'Backspace' && !tagInput && (draft.tags || []).length) {
+                          removeTag((draft.tags || [])[draft.tags!.length - 1]);
+                        }
+                      }}
+                      placeholder={(draft.tags || []).length ? 'Add…' : 'Add a tag…'}
+                      className="w-40 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none h-7"
+                    />
+
+                    {/* Autocomplete popup — existing tags filtered as you type */}
+                    {showTagPopup && (
+                      <div className="absolute z-10 top-full left-0 mt-2 w-56 max-h-52 overflow-y-auto rounded-xl border border-white/10 bg-[#222222] shadow-2xl p-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+                        {tagSuggestions.length > 0 ? (
+                          tagSuggestions.map(tag => (
+                            <button
+                              key={tag}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => addTagValue(tag)}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                            >
+                              <TagIcon size={12} className="text-[var(--accent2)] shrink-0" />
+                              <span className="truncate">{tag}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-2.5 py-2 text-xs text-white/40 leading-relaxed">
+                            Press <span className="text-white/70 font-semibold">Enter</span> to add new tag
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </span>
+                </div>
+              </PropertyRow>
+
+              <PropertyRow icon={<Sparkles size={13} />} label="XP" noDivider>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={draft.xp ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({ xp: v === '' ? undefined : Math.max(0, parseInt(v) || 0) });
+                  }}
+                  style={{ colorScheme: 'dark' }}
+                  placeholder="0"
+                  className={`${inputClass} font-mono text-xs`}
+                />
+              </PropertyRow>
+            </div>
+          </div>
+        </motion.div>
+    </motion.div>
+  );
+};

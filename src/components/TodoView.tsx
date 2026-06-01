@@ -20,6 +20,7 @@ import {
   Circle,
   Clock,
   CheckSquare,
+  Maximize2,
   X
 } from 'lucide-react';
 // import CircleCheckCutout from "../assets/circle-check-cutout.svg?react";
@@ -49,6 +50,7 @@ import { timeToPercentage, percentageToTime, formatTime12h } from '../utils/time
 
 import { TrackerCard } from './TrackerCard';
 import { CalendarView } from './CalendarView';
+import { TodoFullView } from './TodoFullView';
 
 interface TodoViewProps {
   dayTodos: DayTodos[];
@@ -75,6 +77,7 @@ interface SortableItemProps {
   isEditing: boolean;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, text: string, time: string, percent: string, newDate: string) => void;
+  onOpenFull: (id: string) => void;
   onStartTracking: (id: string) => void;
   isActive: boolean;
   now: Date;
@@ -90,6 +93,7 @@ interface TodoItemProps {
   isEditing: boolean;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, text: string, time: string, percent: string, newDate: string) => void;
+  onOpenFull: (id: string) => void;
   onStartTracking: (id: string) => void;
   isActive: boolean;
   isDragging?: boolean;
@@ -110,6 +114,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
   isEditing,
   onCancelEdit,
   onSaveEdit,
+  onOpenFull,
   onStartTracking,
   isActive,
   isDragging,
@@ -251,7 +256,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
       <button
         {...attributes}
         {...listeners}
-        className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/40 transition-all"
+        className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-white/40 hover:text-white/70 transition-all"
       >
         <GripVertical size={18} />
       </button>
@@ -269,14 +274,26 @@ const TodoItem: React.FC<TodoItemProps> = ({
         </motion.div>
       </button>
 
-      <div className="flex-1 min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
-        <p className={`text-md transition duration-200 ease-out font-medium ${todo.completed
-          ? 'text-white/25 line-through translate-x-[3px]'
-          : 'text-white group-hover/text:text-(--accent2)'
-          }`}>
-          {todo.text}
-        </p>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className="min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
+          <p className={`text-md transition duration-200 ease-out font-medium truncate ${todo.completed
+            ? 'text-white/25 line-through translate-x-[3px]'
+            : 'text-white group-hover/text:text-(--accent2)'
+            }`}>
+            {todo.text}
+          </p>
+        </div>
+
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenFull(todo.id); }}
+          title="Open full view"
+          className="opacity-0 group-hover:opacity-100 p-1 text-white/50 hover:text-white/80 hover:bg-white/5 rounded-md transition-all shrink-0"
+        >
+          <Maximize2 size={13} />
+        </button>
       </div>
+
+      <div className="flex-1" />
 
       <div className="flex items-center gap-2">
         {(todo.endTime || todo.percentageGoal !== undefined) && (
@@ -331,7 +348,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
 
       <button
         onClick={() => onDelete(todo.id)}
-        className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 hover:bg-[#d93d42]/10 rounded-lg transition-all"
+        className="opacity-0 group-hover:opacity-100 p-2 text-white/40 hover:text-red-400 hover:bg-[#d93d42]/10 rounded-lg transition-all"
       >
         <Trash2 size={16} />
       </button>
@@ -394,6 +411,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [fullViewId, setFullViewId] = useState<string | null>(null);
   const [newTodoText, setNewTodoText] = useState('');
   const [newTodoTime, setNewTodoTime] = useState('');
   const [newTodoPercent, setNewTodoPercent] = useState<string>('');
@@ -507,6 +525,43 @@ export const TodoView: React.FC<TodoViewProps> = ({
       onUpdateTodos(selectedDate, newTodos);
     }
     setEditingId(null);
+  };
+
+  // Full view: locate the todo (and the day it lives on) by id across all days,
+  // so the panel stays open even if the date is changed from within it.
+  const fullViewData = useMemo(() => {
+    if (!fullViewId) return null;
+    for (const d of dayTodos) {
+      const t = (d.todos || []).find(x => x && x.id === fullViewId);
+      if (t) return { todo: t, date: d.date };
+    }
+    return null;
+  }, [fullViewId, dayTodos]);
+
+  // Unique tags used across every todo, for the full-view autocomplete.
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of dayTodos) {
+      for (const t of (d.todos || [])) {
+        (t?.tags || []).forEach(tag => set.add(tag));
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [dayTodos]);
+
+  const saveFullTodo = (updated: Todo, newDate: string) => {
+    // Find the date the todo currently lives on
+    let oldDate = newDate;
+    for (const d of dayTodos) {
+      if ((d.todos || []).some(t => t && t.id === updated.id)) { oldDate = d.date; break; }
+    }
+    if (newDate !== oldDate) {
+      onMoveTodo(oldDate, newDate, updated);
+    } else {
+      const day = dayTodos.find(d => d.date === oldDate);
+      const newTodos = (day?.todos || []).map(t => t && t.id === updated.id ? updated : t);
+      onUpdateTodos(oldDate, newTodos);
+    }
   };
 
   const activeTodo = useMemo(() =>
@@ -657,6 +712,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                     isEditing={editingId === todo.id}
                     onCancelEdit={() => setEditingId(null)}
                     onSaveEdit={saveEdit}
+                    onOpenFull={(id) => setFullViewId(id)}
                     onStartTracking={onStartTracking}
                     isActive={activeTodoId === todo.id}
                     now={now}
@@ -676,6 +732,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                   isEditing={false}
                   onCancelEdit={() => { }}
                   onSaveEdit={() => { }}
+                  onOpenFull={() => { }}
                   onStartTracking={() => { }}
                   isActive={activeTodoId === activeTodo.id}
                   now={now}
@@ -786,6 +843,24 @@ export const TodoView: React.FC<TodoViewProps> = ({
           />
         </div>
       </div>
+
+      <AnimatePresence>
+        {fullViewData && (
+          <TodoFullView
+            key={fullViewData.todo.id}
+            todo={fullViewData.todo}
+            date={fullViewData.date}
+            allTags={allTags}
+            onClose={() => setFullViewId(null)}
+            onSave={saveFullTodo}
+            onToggle={onToggleTodo}
+            onDelete={(id) => {
+              const loc = dayTodos.find(d => (d.todos || []).some(t => t && t.id === id));
+              if (loc) onUpdateTodos(loc.date, (loc.todos || []).filter(t => t && t.id !== id));
+            }}
+          />
+        )}
+      </AnimatePresence>
 
     </div>
   );
