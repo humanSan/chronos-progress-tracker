@@ -53,6 +53,8 @@ import { TrackerCard } from './TrackerCard';
 import { CalendarView } from './CalendarView';
 import { TodoFullView } from './TodoFullView';
 import { QuickEditTodo, QuickEditValues } from './QuickEditTodo';
+import { XpProgressBar } from './XpProgressBar';
+import { computeXpStats } from '../utils/xpUtils';
 
 interface TodoViewProps {
   dayTodos: DayTodos[];
@@ -234,7 +236,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
         {todo.xp !== undefined && (
           <div className={`flex items-center justify-center gap-1.5 px-2.75 py-[5.5px] rounded-lg text-[13px] leading-none font-mono font-medium ${todo.completed
             ? 'bg-white/5 text-white/20'
-            : 'bg-[#ffba44]/10 text-[#ffba44]'
+            : 'bg-[#ffba44]/6 text-[#ffba44]'
             }`}>
             <Sparkles size={16} />
             <span className="relative top-px">{todo.xp} XP</span>
@@ -248,7 +250,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
               ? 'bg-white/5 shadow-none'
               : isActive
                 ? 'bg-[var(--accent1)] shadow-lg shadow-[var(--accent1)]/10'
-                : 'bg-[var(--accent1)]/7 shadow-none hover:bg-[var(--accent1)]/15'
+                : 'bg-[var(--accent1)]/6 shadow-none hover:bg-[var(--accent1)]/15'
               }`}>
             {todo.endTime && (
               <div className={`flex items-center justify-center gap-1.5 text-[13px] leading-none font-mono font-medium transition-colors duration-500 ${todo.completed
@@ -375,6 +377,11 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const currentDayData = useMemo(() => {
     return dayTodos.find(d => d.date === selectedDate) || { date: selectedDate, todos: [] };
   }, [dayTodos, selectedDate]);
+
+  const xpStats = useMemo(
+    () => computeXpStats(dayTodos, selectedDate, weekStartsOn),
+    [dayTodos, selectedDate, weekStartsOn]
+  );
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(parseISO(selectedDate), { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 });
@@ -746,6 +753,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
           />
         )}
       </AnimatePresence>
+
+      <XpProgressBar stats={xpStats} />
 
     </div>
   );
