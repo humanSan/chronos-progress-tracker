@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { Calendar, Clock, Maximize2 } from 'lucide-react';
+import { Calendar, Clock, Sparkles, Maximize2 } from 'lucide-react';
 import { formatTime12h, timeToPercentage, percentageToTime } from '../utils/timeUtils';
 
 export interface QuickEditValues {
@@ -9,6 +9,7 @@ export interface QuickEditValues {
   date: string;            // YYYY-MM-DD
   endTime?: string;        // HH:MM
   percentageGoal?: number;
+  xp?: number;
 }
 
 interface QuickEditTodoProps {
@@ -18,10 +19,14 @@ interface QuickEditTodoProps {
   initialDate: string;
   initialTime?: string;
   initialPercent?: number;
+  initialXp?: number;
   onSubmit: (vals: QuickEditValues) => void;
   onCancel: () => void;
-  onOpenFull?: () => void; // edit mode: jump to the full view
+  onOpenFull?: () => void;          // edit mode: jump to the full view
+  onFlush?: (vals: QuickEditValues) => void; // edit mode: persist on forced close
 }
+
+const GOLD = '#e0a23a';
 
 export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
   mode,
@@ -30,38 +35,74 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
   initialDate,
   initialTime,
   initialPercent,
+  initialXp,
   onSubmit,
   onCancel,
-  onOpenFull
+  onOpenFull,
+  onFlush
 }) => {
   const [text, setText] = useState(initialText || '');
-  const [notes, setNotes] = useState(initialNotes || '');
+  // Notes aren't edited here (no description field) but are preserved on save.
+  const [notes] = useState(initialNotes || '');
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime || '');
   const [percentStr, setPercentStr] = useState(initialPercent?.toString() ?? '');
+  const [xpStr, setXpStr] = useState(initialXp?.toString() ?? '');
 
   // Which chip's dropdown editor is open (null = none)
-  const [openEditor, setOpenEditor] = useState<'date' | 'time' | null>(null);
+  const [openEditor, setOpenEditor] = useState<'date' | 'time' | 'xp' | null>(null);
   const dateWrapRef = useRef<HTMLDivElement>(null);
   const timeWrapRef = useRef<HTMLDivElement>(null);
+  const xpWrapRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  // Guards for the flush-on-unmount behaviour
+  const committedRef = useRef(false);                       // true after Save/Cancel
+  const latestRef = useRef<QuickEditValues | null>(null);   // current values snapshot
+
+  const buildValues = (): QuickEditValues => ({
+    text: text.trim(),
+    notes,
+    date,
+    endTime: time || undefined,
+    percentageGoal: percentStr ? parseFloat(percentStr) : undefined,
+    xp: xpStr ? Math.max(0, parseInt(xpStr) || 0) : undefined
+  });
+
+  // Keep the latest snapshot fresh for the unmount flush.
+  latestRef.current = buildValues();
 
   // Re-seed when the target changes (e.g. switching which todo is being edited)
   useEffect(() => {
     setText(initialText || '');
-    setNotes(initialNotes || '');
     setDate(initialDate);
     setTime(initialTime || '');
     setPercentStr(initialPercent?.toString() ?? '');
+    setXpStr(initialXp?.toString() ?? '');
     setOpenEditor(null);
-  }, [initialText, initialNotes, initialDate, initialTime, initialPercent]);
+    committedRef.current = false;
+  }, [initialText, initialNotes, initialDate, initialTime, initialPercent, initialXp]);
 
-  // Close the open dropdown when clicking elsewhere. Native date/time pickers are
-  // OS-level overlays and don't dispatch mousedown to the document, so interacting
-  // with the picker keeps the dropdown open.
+  // On unmount, if an edit panel is force-closed (not via Save/Cancel), persist
+  // its current values so switching panels doesn't lose changes.
+  useEffect(() => {
+    return () => {
+      if (mode === 'edit' && !committedRef.current && onFlush) {
+        const v = latestRef.current;
+        if (v && v.text.trim()) onFlush(v);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Close the open dropdown when clicking elsewhere. Native pickers are OS-level
+  // overlays and don't dispatch mousedown to the document, so they stay open.
   useEffect(() => {
     if (!openEditor) return;
     const onDown = (e: MouseEvent) => {
-      const wrap = openEditor === 'date' ? dateWrapRef.current : timeWrapRef.current;
+      const wrap = openEditor === 'date' ? dateWrapRef.current
+        : openEditor === 'time' ? timeWrapRef.current
+          : xpWrapRef.current;
       if (wrap && !wrap.contains(e.target as Node)) setOpenEditor(null);
     };
     document.addEventListener('mousedown', onDown);
@@ -89,20 +130,32 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
 
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit({
-      text: text.trim(),
-      notes: notes.trim(),
-      date,
-      endTime: time || undefined,
-      percentageGoal: percentStr ? parseFloat(percentStr) : undefined
-    });
+    committedRef.current = true;
+    onSubmit(buildValues());
+    if (mode === 'add') {
+      // Keep the panel open for rapid entry (Todoist-style): reset & refocus.
+      setText('');
+      setTime('');
+      setPercentStr('');
+      setXpStr('');
+      setDate(initialDate);
+      setOpenEditor(null);
+      committedRef.current = false;
+      requestAnimationFrame(() => nameRef.current?.focus());
+    }
+  };
+
+  const cancel = () => {
+    committedRef.current = true;
+    onCancel();
   };
 
   const pct = percentStr === ''
     ? null
     : (Number.isInteger(+percentStr) ? +percentStr : Math.round(+percentStr));
+  const xpVal = xpStr === '' ? null : Math.max(0, parseInt(xpStr) || 0);
 
-  // Chips mirror the list-view time/percent badge exactly: icon + mono value on a
+  // Chips mirror the list-view time/percent badge: icon + mono value on a
   // low-opacity tint of the accent color, no border.
   const chipBase =
     'flex items-center justify-center gap-2 px-2.75 py-[5.5px] rounded-lg';
@@ -110,6 +163,8 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
     'flex items-center justify-center gap-1.5 text-[13px] leading-none font-mono font-medium';
   const fieldBase =
     'bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-sm font-mono focus:outline-none focus:border-[var(--accent2)]';
+  const popover =
+    'absolute z-20 top-full left-0 mt-2 rounded-xl border border-white/10 bg-[#1f1f1f] shadow-2xl p-2';
 
   return (
     <div
@@ -117,30 +172,23 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
         if (e.key === 'Escape') {
           e.preventDefault();
-          if (openEditor) setOpenEditor(null); else onCancel();
+          if (openEditor) setOpenEditor(null); else cancel();
         }
       }}
-      className="p-3.5 bg-[#1A1A1A] border border-[var(--accent2)]/30 rounded-2xl shadow-xl"
+      className="my-2 mx-4 p-3.5 bg-[#1A1A1A] border border-[var(--accent2)]/30 rounded-2xl shadow-xl"
     >
       <input
+        ref={nameRef}
         autoFocus
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Task name"
-        className="w-full bg-transparent text-white text-base font-semibold placeholder:text-white/30 focus:outline-none"
-      />
-
-      <input
-        type="text"
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Description"
-        className="w-full bg-transparent text-white/70 text-sm placeholder:text-white/25 focus:outline-none mt-1.5"
+        className="w-full bg-transparent text-white text-base font-medium placeholder:text-white/30 focus:outline-none"
       />
 
       {/* Chips — display only. Clicking opens a dropdown editor below the chip. */}
-      <div className="flex items-center gap-2 mt-3.5 flex-wrap">
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
         {/* Date */}
         <div ref={dateWrapRef} className="relative">
           <button
@@ -155,7 +203,7 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
           </button>
 
           {openEditor === 'date' && (
-            <div className="absolute z-20 top-full left-0 mt-2 rounded-xl border border-white/10 bg-[#1f1f1f] shadow-2xl p-2">
+            <div className={popover}>
               <input
                 autoFocus
                 type="date"
@@ -197,7 +245,7 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
           </button>
 
           {openEditor === 'time' && (
-            <div className="absolute z-20 top-full left-0 mt-2 rounded-xl border border-white/10 bg-[#1f1f1f] shadow-2xl p-2">
+            <div className={popover}>
               <div className="flex items-center h-9 bg-white/5 border border-white/10 rounded-lg focus-within:border-[var(--accent2)] overflow-hidden">
                 <input
                   autoFocus
@@ -223,10 +271,42 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
             </div>
           )}
         </div>
+
+        {/* XP */}
+        <div ref={xpWrapRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setOpenEditor(o => o === 'xp' ? null : 'xp')}
+            className={`${chipBase} ${xpVal !== null ? 'bg-[#e0a23a]/10 hover:bg-[#e0a23a]/20' : 'bg-white/5 hover:bg-white/10'}`}
+          >
+            <span className={chipText} style={{ color: xpVal !== null ? GOLD : undefined }}>
+              <Sparkles size={16} className={xpVal !== null ? '' : 'text-white/55'} />
+              <span className={`relative top-px ${xpVal !== null ? '' : 'text-white/55'}`}>
+                {xpVal !== null ? `${xpVal} XP` : 'XP'}
+              </span>
+            </span>
+          </button>
+
+          {openEditor === 'xp' && (
+            <div className={popover}>
+              <input
+                autoFocus
+                type="number"
+                min="0"
+                step="1"
+                value={xpStr}
+                onChange={(e) => setXpStr(e.target.value)}
+                style={{ colorScheme: 'dark' }}
+                placeholder="XP"
+                className={`${fieldBase} w-[110px]`}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 mt-3.5 pt-2.5 border-t border-white/5">
+      <div className="flex items-center gap-2 mt-2.5">
         {mode === 'edit' && onOpenFull && (
           <button
             type="button"
@@ -240,7 +320,7 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
         <div className="flex-1" />
         <button
           type="button"
-          onClick={onCancel}
+          onClick={cancel}
           className="px-3 h-8 bg-white/5 hover:bg-white/10 text-white/60 rounded-lg text-xs font-bold"
         >
           Cancel

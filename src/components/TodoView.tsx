@@ -78,6 +78,7 @@ interface SortableItemProps {
   isEditing: boolean;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, vals: QuickEditValues) => void;
+  onCommitEdit: (id: string, vals: QuickEditValues) => void;
   onOpenFull: (id: string) => void;
   onStartTracking: (id: string) => void;
   isActive: boolean;
@@ -94,6 +95,7 @@ interface TodoItemProps {
   isEditing: boolean;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, vals: QuickEditValues) => void;
+  onCommitEdit: (id: string, vals: QuickEditValues) => void;
   onOpenFull: (id: string) => void;
   onStartTracking: (id: string) => void;
   isActive: boolean;
@@ -115,6 +117,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
   isEditing,
   onCancelEdit,
   onSaveEdit,
+  onCommitEdit,
   onOpenFull,
   onStartTracking,
   isActive,
@@ -160,9 +163,11 @@ const TodoItem: React.FC<TodoItemProps> = ({
           initialDate={date}
           initialTime={todo.endTime}
           initialPercent={todo.percentageGoal}
+          initialXp={todo.xp}
           onSubmit={(vals) => onSaveEdit(todo.id, vals)}
           onCancel={onCancelEdit}
           onOpenFull={() => onOpenFull(todo.id)}
+          onFlush={(vals) => onCommitEdit(todo.id, vals)}
         />
       </div>
     );
@@ -386,6 +391,18 @@ export const TodoView: React.FC<TodoViewProps> = ({
     }
   };
 
+  // Open the add panel, closing (and flushing) any open edit panel first.
+  const openAddPanel = () => {
+    setEditingId(null);
+    setIsAdding(true);
+  };
+
+  // Open an edit panel, closing the add panel first.
+  const openEditPanel = (id: string) => {
+    setIsAdding(false);
+    setEditingId(id);
+  };
+
   const handleAddTodo = (vals: QuickEditValues) => {
     if (!vals.text.trim()) return;
 
@@ -396,6 +413,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
       notes: vals.notes || undefined,
       endTime: vals.endTime,
       percentageGoal: vals.percentageGoal,
+      xp: vals.xp,
       createdAt: Date.now()
     };
 
@@ -406,7 +424,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
       const targetDayData = dayTodos.find(d => d.date === target) || { date: target, todos: [] };
       onUpdateTodos(target, [...targetDayData.todos, newTodo]);
     }
-    setIsAdding(false);
+    // Panel stays open (QuickEditTodo resets itself) for rapid entry.
   };
 
   const deleteTodo = (id: string) => {
@@ -414,7 +432,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
     onUpdateTodos(selectedDate, newTodos);
   };
 
-  const saveEdit = (id: string, vals: QuickEditValues) => {
+  // Persist edits without closing the panel (used by Save and the unmount flush).
+  const persistEdit = (id: string, vals: QuickEditValues) => {
     const todoToEdit = currentDayData.todos.find(t => t && t.id === id);
     if (!todoToEdit) return;
 
@@ -423,7 +442,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
       text: vals.text,
       notes: vals.notes || undefined,
       endTime: vals.endTime,
-      percentageGoal: vals.percentageGoal
+      percentageGoal: vals.percentageGoal,
+      xp: vals.xp
     };
 
     if (vals.date !== selectedDate) {
@@ -432,6 +452,10 @@ export const TodoView: React.FC<TodoViewProps> = ({
       const newTodos = currentDayData.todos.map(t => t && t.id === id ? updatedTodo : t);
       onUpdateTodos(selectedDate, newTodos);
     }
+  };
+
+  const saveEdit = (id: string, vals: QuickEditValues) => {
+    persistEdit(id, vals);
     setEditingId(null);
   };
 
@@ -616,10 +640,11 @@ export const TodoView: React.FC<TodoViewProps> = ({
                     date={selectedDate}
                     onToggle={onToggleTodo}
                     onDelete={deleteTodo}
-                    onEdit={(t) => setEditingId(t.id)}
+                    onEdit={(t) => openEditPanel(t.id)}
                     isEditing={editingId === todo.id}
                     onCancelEdit={() => setEditingId(null)}
                     onSaveEdit={saveEdit}
+                    onCommitEdit={persistEdit}
                     onOpenFull={(id) => setFullViewId(id)}
                     onStartTracking={onStartTracking}
                     isActive={activeTodoId === todo.id}
@@ -640,6 +665,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
                   isEditing={false}
                   onCancelEdit={() => { }}
                   onSaveEdit={() => { }}
+                  onCommitEdit={() => { }}
                   onOpenFull={() => { }}
                   onStartTracking={() => { }}
                   isActive={activeTodoId === activeTodo.id}
@@ -653,7 +679,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
           {/* Add Todo Inline */}
           {!isAdding ? (
             <button
-              onClick={() => setIsAdding(true)}
+              onClick={openAddPanel}
               className="flex items-center gap-2 py-2 text-white/25 hover:text-white/50 transition-all group duration-100"
             >
               <GripVertical size={18} className="invisible" />
