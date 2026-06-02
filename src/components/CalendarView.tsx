@@ -1012,6 +1012,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               );
             })}
           </div>
+
+          {/* Ending line marking the bottom of the day — mirrors the top header border */}
+          <div className="border-t border-white/5" />
+          {/* Breathing room so the final hours scroll clear of the fixed XP progress bar */}
+          <div className="h-16 shrink-0" />
         </div>
       </div>
 

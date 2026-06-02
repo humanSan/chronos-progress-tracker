@@ -54,6 +54,7 @@ import { CalendarView } from './CalendarView';
 import { TodoFullView } from './TodoFullView';
 import { QuickEditTodo, QuickEditValues } from './QuickEditTodo';
 import { XpProgressBar } from './XpProgressBar';
+import { StarStreak } from './StarStreak';
 import { computeXpStats } from '../utils/xpUtils';
 
 interface TodoViewProps {
@@ -755,6 +756,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
       </AnimatePresence>
 
       <XpProgressBar stats={xpStats} />
+      <StarStreak dayTodos={dayTodos} date={selectedDate} />
 
     </div>
   );
