@@ -9,6 +9,7 @@ import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
 import { CalendarView } from './components/CalendarView';
+import { StatsView } from './components/StatsView';
 import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 import { StopwatchWidget, TimerState } from './components/StopwatchWidget';
 import { StopwatchFullscreen } from './components/StopwatchFullscreen';
@@ -52,6 +53,9 @@ export default function App() {
     const saved = localStorage.getItem('dun-countdown-mode');
     return (saved as 'off' | 'time' | 'percent') || 'off';
   });
+  const [xpEnabled, setXpEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('dun-xp-enabled') !== 'false'; // default on
+  });
 
 
   const [session, setSession] = useState<any>(null);
@@ -64,7 +68,7 @@ export default function App() {
     const saved = localStorage.getItem('dun-theme');
     return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
   });
-  const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'calendar'>('todos');
+  const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'calendar' | 'stats'>('todos');
   const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
     const saved = localStorage.getItem('dun-todos');
     return saved ? JSON.parse(saved) : [];
@@ -152,6 +156,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dun-countdown-mode', countdownMode);
   }, [countdownMode]);
+
+  useEffect(() => {
+    localStorage.setItem('dun-xp-enabled', String(xpEnabled));
+  }, [xpEnabled]);
 
   useEffect(() => {
     localStorage.setItem('dun-todos', JSON.stringify(dayTodos));
@@ -261,9 +269,9 @@ export default function App() {
     .flatMap(d => d.todos || [])
     .find(t => t && t.id === activeTodoId);
 
-  const handleViewChange = (view: 'trackers' | 'todos' | 'calendar') => {
+  const handleViewChange = (view: 'trackers' | 'todos' | 'calendar' | 'stats') => {
     setActiveView(view);
-    if (view === 'todos' || view === 'calendar') {
+    if (view === 'todos' || view === 'calendar' || view === 'stats') {
       setIsFullscreen(false);
     }
   };
@@ -423,13 +431,20 @@ export default function App() {
                   onUpdateWeekStartsOn={setWeekStartsOn}
                   countdownMode={countdownMode}
                   onUpdateCountdownMode={setCountdownMode}
+                  xpEnabled={xpEnabled}
                 />
               </div>
-            ) : (
+            ) : activeView === 'calendar' ? (
               <div key="calendar-view">
                 <CalendarView
                   dayTodos={dayTodos}
                   onUpdateTodos={handleUpdateTodos}
+                />
+              </div>
+            ) : (
+              <div key="stats-view">
+                <StatsView
+                  dayTodos={dayTodos}
                 />
               </div>
             )}
@@ -453,6 +468,8 @@ export default function App() {
         onUpdateWeekStartsOn={setWeekStartsOn}
         countdownMode={countdownMode}
         onUpdateCountdownMode={setCountdownMode}
+        xpEnabled={xpEnabled}
+        onUpdateXpEnabled={setXpEnabled}
         theme={theme}
         onUpdateTheme={setTheme}
       />

@@ -253,7 +253,7 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
             </div>
 
             {/* Notes / description — auto-grows up to ~6 lines, then scrolls */}
-            <div className="group/notes flex items-start gap-2 mt-3 pl-[34px]">
+            <div className="group/notes flex items-start gap-2 mt-4 pl-[34px]">
               <textarea
                 ref={notesRef}
                 value={draft.notes || ''}

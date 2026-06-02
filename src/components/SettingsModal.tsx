@@ -10,6 +10,8 @@ interface SettingsModalProps {
   onUpdateWeekStartsOn: (val: number) => void;
   countdownMode: 'off' | 'time' | 'percent';
   onUpdateCountdownMode: (val: 'off' | 'time' | 'percent') => void;
+  xpEnabled: boolean;
+  onUpdateXpEnabled: (val: boolean) => void;
   theme: Theme;
   onUpdateTheme: (theme: Theme) => void;
 }
@@ -21,6 +23,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateWeekStartsOn,
   countdownMode,
   onUpdateCountdownMode,
+  xpEnabled,
+  onUpdateXpEnabled,
   theme,
   onUpdateTheme,
 }) => {
@@ -113,6 +117,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {toggleBtn(countdownMode === 'time',    () => onUpdateCountdownMode('time'),    'Time Left')}
                   {toggleBtn(countdownMode === 'percent', () => onUpdateCountdownMode('percent'), 'Percent Left')}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-xs font-bold text-white/40 uppercase tracking-widest">XP & Streaks</label>
+                  <p className="text-[11px] text-white/30 mt-0.5">Show XP, progress bar and streak stars</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={xpEnabled}
+                  onClick={() => onUpdateXpEnabled(!xpEnabled)}
+                  className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
+                    xpEnabled ? 'bg-[var(--accent2)]' : 'bg-white/10'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      xpEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* ── Appearance ────────────────────────────── */}

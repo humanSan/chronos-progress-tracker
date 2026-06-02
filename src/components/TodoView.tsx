@@ -71,6 +71,7 @@ interface TodoViewProps {
   onUpdateWeekStartsOn: (val: number) => void;
   countdownMode: 'off' | 'time' | 'percent';
   onUpdateCountdownMode: (val: 'off' | 'time' | 'percent') => void;
+  xpEnabled: boolean;
 }
 
 interface SortableItemProps {
@@ -349,6 +350,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
   onUpdateWeekStartsOn,
   countdownMode,
   onUpdateCountdownMode,
+  xpEnabled,
 }) => {
   const orderedTrackers = useMemo(() => {
     const dayTracker = trackers.find(t => t.type === 'day');
@@ -755,8 +757,12 @@ export const TodoView: React.FC<TodoViewProps> = ({
         )}
       </AnimatePresence>
 
-      <XpProgressBar stats={xpStats} />
-      <StarStreak dayTodos={dayTodos} date={selectedDate} />
+      {xpEnabled && (
+        <>
+          <XpProgressBar stats={xpStats} />
+          <StarStreak dayTodos={dayTodos} date={selectedDate} />
+        </>
+      )}
 
     </div>
   );

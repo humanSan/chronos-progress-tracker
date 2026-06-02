@@ -37,17 +37,17 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats }) => {
     status = target === 0 ? 'Any XP beats yesterday' : `${remaining} XP to beat yesterday`;
   } else if (!reachedWeekBest) {
     // Yesterday cleared (gold). Point at the next goal: the 7-day best.
-    status = `Ahead of yesterday · ${bestLast7Days - earned} XP to 7-day best`;
+    status = `Ahead of yesterday ⬩ ${bestLast7Days - earned} XP to 7-day best`;
   } else if (!reachedAllTimeBest) {
     // 7-day best cleared (violet). Point at the all-time best.
     status = `${bestAllTime - earned} XP to beat all-time best`;
   } else {
     const over = earned - bestAllTime;
-    status = over > 0 ? `New all-time best · +${over} XP` : 'All-time best matched';
+    status = over > 0 ? `New all-time best ⬩ +${over} XP` : 'All-time best matched';
   }
 
   const pctLabel = `${Math.round(percent)}%`;
-  const barColor = reachedWeekBest ? VIOLET : GOLD;
+  const barColor = reachedWeekBest ? VIOLET : "#ff723a"; //#ff774d coral maybe
 
   // Count-up: smoothly tick the displayed number toward the real earned total.
   const count = useMotionValue(earned);
@@ -89,7 +89,7 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats }) => {
               {status}
             </span>
 
-            {/* Today: still available · yesterday */}
+            {/* Today: still available ⬩ yesterday */}
             <span className="text-[12px] font-medium leading-tight">
               <span className='text-white/85'>
               <span className="">{upForGrabs}</span> up for grabs ⬩ 
@@ -101,7 +101,7 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats }) => {
               <span className="text-white/60"> yesterday</span> */}
             </span>
 
-            {/* Records: best 7d · best all time · total all time */}
+            {/* Records: best 7d ⬩ best all time ⬩ total all time */}
             <span className="text-[12px] leading-tight">
               <span className='text-white/70'>
               <span className=""> {bestLast7Days} </span> best 7d ⬩

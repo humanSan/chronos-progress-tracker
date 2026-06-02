@@ -1,10 +1,10 @@
 import React from 'react';
-import { Clock, CheckSquare, Calendar, User, Settings, Timer } from 'lucide-react';
+import { Clock, CheckSquare, Calendar, User, Settings, Timer, BarChart2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
-  activeView: 'trackers' | 'todos' | 'calendar';
-  onViewChange: (view: 'trackers' | 'todos' | 'calendar') => void;
+  activeView: 'trackers' | 'todos' | 'calendar' | 'stats';
+  onViewChange: (view: 'trackers' | 'todos' | 'calendar' | 'stats') => void;
   isVisible: boolean;
   isAuthenticated: boolean;
   onAccountClick: () => void;
@@ -20,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
     { key: 'todos' as const, icon: CheckSquare, title: 'Daily Todos', color: '--accent2' },
     { key: 'trackers' as const, icon: Clock, title: 'Trackers', color: '--accent1' },
     { key: 'calendar' as const, icon: Calendar, title: 'Calendar', color: '--accent2' },
+    { key: 'stats' as const, icon: BarChart2, title: 'Stats', color: '--accent1' },
   ];
 
   return (
