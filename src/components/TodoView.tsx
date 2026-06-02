@@ -55,7 +55,7 @@ import { TodoFullView } from './TodoFullView';
 import { QuickEditTodo, QuickEditValues } from './QuickEditTodo';
 import { XpProgressBar } from './XpProgressBar';
 import { StarStreak } from './StarStreak';
-import { computeXpStats } from '../utils/xpUtils';
+import { computeXpStats, getWeeklyXp } from '../utils/xpUtils';
 
 interface TodoViewProps {
   dayTodos: DayTodos[];
@@ -385,6 +385,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
     () => computeXpStats(dayTodos, selectedDate, weekStartsOn),
     [dayTodos, selectedDate, weekStartsOn]
   );
+
+  const weeklyXp = useMemo(() => getWeeklyXp(dayTodos, 4), [dayTodos]);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(parseISO(selectedDate), { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 });
@@ -759,7 +761,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
       {xpEnabled && (
         <>
-          <XpProgressBar stats={xpStats} />
+          <XpProgressBar stats={xpStats} weeklyXp={weeklyXp} />
           <StarStreak dayTodos={dayTodos} date={selectedDate} />
         </>
       )}

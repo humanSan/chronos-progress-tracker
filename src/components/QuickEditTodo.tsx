@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Calendar, Clock, Sparkles, Maximize2, X } from 'lucide-react';
 import { formatTime12h, timeToPercentage, percentageToTime } from '../utils/timeUtils';
@@ -54,6 +54,24 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
   const timeWrapRef = useRef<HTMLDivElement>(null);
   const xpWrapRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-size the notes textarea: one line by default, growing with content and
+  // capping at ~3 lines before it becomes scrollable. (Same idea as the full
+  // view, which allows more lines because it has more room.)
+  const NOTES_MIN_HEIGHT = 24; // px, ~1 line
+  const NOTES_MAX_HEIGHT = 70; // px, ~3 lines
+  const resizeNotes = () => {
+    const el = notesRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, NOTES_MIN_HEIGHT), NOTES_MAX_HEIGHT);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > NOTES_MAX_HEIGHT ? 'auto' : 'hidden';
+  };
+
+  // Re-measure when the notes content changes (incl. when a new target re-seeds).
+  useLayoutEffect(resizeNotes, [notes]);
 
   // Guards for the flush-on-unmount behaviour
   const committedRef = useRef(false);                       // true after Save/Cancel
@@ -188,12 +206,14 @@ export const QuickEditTodo: React.FC<QuickEditTodoProps> = ({
         className="w-full bg-transparent text-white text-base font-medium placeholder:text-white/30 focus:outline-none"
       />
 
-      <input
-        type="text"
+      <textarea
+        ref={notesRef}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
+        onInput={resizeNotes}
+        rows={1}
         placeholder="Add notes…"
-        className="w-full bg-transparent text-white/70 text-sm placeholder:text-white/25 focus:outline-none mt-2"
+        className="w-full bg-transparent resize-none text-white/70 text-sm leading-relaxed placeholder:text-white/25 focus:outline-none mt-2 overflow-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/25"
       />
 
       {/* Chips — display only. Clicking opens a dropdown editor below the chip. */}

@@ -99,6 +99,25 @@ export function computeXpStats(
   };
 }
 
+/**
+ * Earned XP for each of the last `weeks` sliding 7-day windows, oldest first
+ * (the final entry is the current week). Windows end on today and step back 7
+ * days at a time — the same shape as the stats page "Week" chart.
+ */
+export function getWeeklyXp(dayTodos: DayTodos[], weeks: number): number[] {
+  const today = new Date();
+  const result: number[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    let sum = 0;
+    const endDay = subDays(today, i * 7);
+    for (let offset = 0; offset < 7; offset++) {
+      sum += getEarnedXp(dayTodos, dayKey(subDays(endDay, offset)));
+    }
+    result.push(sum);
+  }
+  return result;
+}
+
 export interface StarStreakStats {
   stars: number;     // 0..3 earned on `date`
   streak: number;    // consecutive streak as of `date` (live while it's today)

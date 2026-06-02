@@ -4,6 +4,8 @@ import { XpStats } from '../utils/xpUtils';
 
 interface XpProgressBarProps {
   stats: XpStats;
+  /** Earned XP for the last 4 sliding weeks, oldest first (last = current week). */
+  weeklyXp: number[];
 }
 
 const GOLD = '#ffc24b';
@@ -12,7 +14,7 @@ const VIOLET = '#a78bfa';
 // Exponential ease-out: snappy start, soft landing.
 const EXPO_OUT: [number, number, number, number] = [0.1, 0, 0, 1];
 
-export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats }) => {
+export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats, weeklyXp }) => {
   const {
     earned,
     target,
@@ -117,6 +119,32 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats }) => {
               <span className="text-white/85">{totalAllTime}</span>
               <span className="text-white/55"> total</span> */}
             </span>
+          </div>
+
+          {/* Last-4-weeks mini bars — a static, at-a-glance progress indicator.
+              Native title tooltip needs hover, so re-enable pointer events here. */}
+          <div className="flex items-end gap-1.5 h-14 pb-2 ml-2 pointer-events-auto">
+            {(() => {
+              const max = Math.max(...weeklyXp, 1);
+              const MAX_H = 52;
+              const MIN_H = 5;
+              const barColor = lit ?? 'var(--accent1)';
+              return weeklyXp.map((xp, i) => {
+                const weeksAgo = weeklyXp.length - 1 - i;
+                const label =
+                  weeksAgo === 0 ? 'This week' : `${weeksAgo} week${weeksAgo > 1 ? 's' : ''} ago`;
+                // A 0-XP week gets no bar at all, so it never reads as progress.
+                const height = xp === 0 ? 0 : Math.max(MIN_H, Math.round((xp / max) * MAX_H));
+                return (
+                  <div
+                    key={i}
+                    title={`${label}: ${xp} XP`}
+                    className="w-3"
+                    style={{ height, backgroundColor: barColor }}
+                  />
+                );
+              });
+            })()}
           </div>
         </div>
       </div>
