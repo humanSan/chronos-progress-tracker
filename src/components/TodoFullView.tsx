@@ -9,7 +9,9 @@ import {
   Percent,
   Tag as TagIcon,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  CircleDot,
+  Flag,
 } from 'lucide-react';
 import { Todo } from '../types';
 import {
@@ -21,6 +23,9 @@ import {
   XpField,
   NotesField,
   TagsField,
+  OptionSelectField,
+  STATUS_OPTIONS,
+  PRIORITY_OPTIONS,
 } from './todoFields';
 
 interface TodoFullViewProps {
@@ -96,12 +101,16 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todo.id]);
 
-  // Toggling completion flows through the parent; mirror that one field back
-  // into the draft (without clobbering other in-progress edits) so the panel
-  // reflects the checked state and plays its animation.
+  // Toggling completion flows through the parent; mirror completion + the synced
+  // status back into the draft (without clobbering other in-progress edits) so the
+  // panel reflects the checked state, the Status pill, and plays its animation.
   useEffect(() => {
-    setDraft(prev => prev.completed === todo.completed ? prev : { ...prev, completed: todo.completed });
-  }, [todo.completed]);
+    setDraft(prev =>
+      prev.completed === todo.completed && prev.status === todo.status
+        ? prev
+        : { ...prev, completed: todo.completed, status: todo.status }
+    );
+  }, [todo.completed, todo.status]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -210,6 +219,36 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
 
             {/* ── Properties ──────────────────────────── */}
             <div className="mt-4">
+              <PropertyRow
+                icon={<CircleDot size={13} />}
+                label="Status"
+                onClear={() => update({ status: undefined })}
+                canClear={draft.status !== undefined}
+              >
+                <OptionSelectField
+                  options={STATUS_OPTIONS}
+                  value={draft.status}
+                  onChange={(val) =>
+                    update({ status: val as Todo['status'], completed: val === 'completed' })
+                  }
+                  variant="inline"
+                />
+              </PropertyRow>
+
+              <PropertyRow
+                icon={<Flag size={13} />}
+                label="Priority"
+                onClear={() => update({ priority: undefined })}
+                canClear={draft.priority !== undefined}
+              >
+                <OptionSelectField
+                  options={PRIORITY_OPTIONS}
+                  value={draft.priority}
+                  onChange={(val) => update({ priority: val as Todo['priority'] })}
+                  variant="inline"
+                />
+              </PropertyRow>
+
               <PropertyRow icon={<CalendarDays size={13} />} label="Date">
                 <DateField
                   value={dateStr}

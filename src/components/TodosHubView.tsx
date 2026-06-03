@@ -38,8 +38,16 @@ import {
   Inbox,
   PanelLeftClose,
   PanelLeftOpen,
+  Table,
+  List,
+  GanttChart,
+  Group,
+  Columns3,
+  Filter,
+  ArrowUpDown,
+  Box,
 } from 'lucide-react';
-import { DayTodos, Todo } from '../types';
+import { DayTodos, Todo, Workspace } from '../types';
 import { getOrganizerTodos, OrganizerEntry, hasDate } from '../utils/todoFilters';
 import { formatTime12h } from '../utils/timeUtils';
 import { TodoFullView } from './TodoFullView';
@@ -52,6 +60,12 @@ import {
   XpField,
   NotesField,
   TagsField,
+  OptionChip,
+  OptionSelectField,
+  STATUS_OPTIONS,
+  PRIORITY_OPTIONS,
+  statusOption,
+  priorityOption,
 } from './todoFields';
 
 interface TodosHubViewProps {
@@ -68,10 +82,16 @@ interface TodosHubViewProps {
   // Persist hub order + nesting (position = hubOrder, parentId = nesting).
   onReorder: (items: { id: string; parentId: string | null }[]) => void;
   onToggleTodo: (id: string) => void;
+  // Workspaces (independent todo databases). Selecting one scopes the planner.
+  workspaces: Workspace[];
+  activeWorkspaceId: string;
+  onSelectWorkspace: (id: string) => void;
+  onAddWorkspace: () => string;
+  onRenameWorkspace: (id: string, name: string) => void;
 }
 
 // ── Column model ─────────────────────────────────────────────────────────────
-type ColKey = 'title' | 'date' | 'start' | 'end' | 'percent' | 'tags' | 'xp' | 'notes';
+type ColKey = 'title' | 'status' | 'priority' | 'date' | 'start' | 'end' | 'percent' | 'tags' | 'xp' | 'notes';
 
 interface ColDef {
   key: ColKey;
@@ -81,6 +101,8 @@ interface ColDef {
 
 const COLUMNS: ColDef[] = [
   { key: 'title', label: 'Name', defaultWidth: 320 },
+  { key: 'status', label: 'Status', defaultWidth: 140 },
+  { key: 'priority', label: 'Priority', defaultWidth: 120 },
   { key: 'date', label: 'Date', defaultWidth: 150 },
   { key: 'start', label: 'Start', defaultWidth: 110 },
   { key: 'end', label: 'End', defaultWidth: 110 },
@@ -250,8 +272,16 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   onArchiveTodo,
   onReorder,
   onToggleTodo,
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onAddWorkspace,
+  onRenameWorkspace,
 }) => {
-  const entries = getOrganizerTodos(dayTodos);
+  // Only this workspace's todos/collections (undefined id ⇒ default 'personal').
+  const entries = getOrganizerTodos(dayTodos).filter(
+    (e) => (e.todo.workspaceId ?? 'personal') === activeWorkspaceId
+  );
 
   // ── Collapse state (persisted) ─────────────────────────────────────────────
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
@@ -316,7 +346,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // (vs. a full-screen overlay) lets the click also land on another cell, so a single
   // click both closes this editor and opens the next one.
   const popoverRef = useRef<HTMLDivElement>(null);
-  const popoverOpen = !!editing && (editing.col === 'tags' || editing.col === 'notes');
+  const POPOVER_COLS: ColKey[] = ['tags', 'notes', 'status', 'priority'];
+  const popoverOpen = !!editing && POPOVER_COLS.includes(editing.col);
   useEffect(() => {
     if (!popoverOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -368,6 +399,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   );
   useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null);
+  const handleNewWorkspace = () => {
+    const id = onAddWorkspace();
+    setSelectedView('all');
+    setRenamingWorkspaceId(id);
+  };
 
   // ── Left-pane sizing (persisted) ───────────────────────────────────────────
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -546,9 +583,9 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     resetDrag();
   };
 
-  // The tags/notes popover edits the entry currently being edited.
+  // The popover (tags/notes/status/priority) edits the entry currently being edited.
   const editingEntry =
-    editing && (editing.col === 'tags' || editing.col === 'notes')
+    editing && POPOVER_COLS.includes(editing.col)
       ? entries.find((e) => e.todo.id === editing.id) || null
       : null;
 
@@ -568,8 +605,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const headerCellCls =
     'relative flex items-center px-2.5 text-xs font-semibold tracking-wide text-white/75 select-none';
 
-  const sidebarItemCls = (view: string) =>
-    `w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left transition-colors ${
+  const sidebarItemCls = (view: string, compact = false) =>
+    `w-full flex items-center rounded-md text-left transition-colors ${
+      compact ? 'gap-1.5 px-2 py-1.5 text-[13px]' : 'gap-2 px-2.5 py-1.5 text-sm'
+    } ${
       selectedView === view
         ? 'bg-white/10 text-white font-medium'
         : 'text-white/65 hover:bg-white/[0.05] hover:text-white'
@@ -583,66 +622,117 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           style={{ width: sidebarWidth }}
           className="relative shrink-0 flex flex-col min-h-0 border-r border-white/10"
         >
-          <div className="flex-1 overflow-y-auto p-2 pt-4 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
-            {/* All Tasks */}
-            <button type="button" onClick={() => setSelectedView('all')} className={sidebarItemCls('all')}>
-              <Layers size={15} className="shrink-0 text-white/45" />
-              <span className="flex-1 truncate">All Tasks</span>
-              <span className="text-xs text-white/35">{allCount}</span>
-            </button>
-
-            {collections.length > 0 && <div className="my-1.5 border-t border-white/8" />}
-
-            {/* Collections */}
-            {collections.map((c) => {
-              const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
-              if (renamingId === c.todo.id) {
+          {/* ── Workspaces section (top) — independent todo databases ───────── */}
+          <div className="shrink-0 flex flex-col max-h-[38%] border-b border-white/10 p-2">
+            <div className="shrink-0 px-2.5 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/30">
+              Workspaces
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {workspaces.map((ws) => {
+                const active = ws.id === activeWorkspaceId;
+                if (renamingWorkspaceId === ws.id) {
+                  return (
+                    <input
+                      key={ws.id}
+                      type="text"
+                      autoFocus
+                      defaultValue={ws.name}
+                      onChange={(e) => onRenameWorkspace(ws.id, e.target.value)}
+                      onBlur={() => setRenamingWorkspaceId(null)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
+                      }}
+                      placeholder="Workspace name"
+                      className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium bg-white/10 text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
+                    />
+                  );
+                }
                 return (
-                  <input
-                    key={c.todo.id}
-                    type="text"
-                    autoFocus
-                    defaultValue={c.todo.text}
-                    onChange={(e) => renameCollection(c, e.target.value)}
-                    onBlur={() => setRenamingId(null)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
-                    }}
-                    placeholder="Collection name"
-                    style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
-                    className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
-                  />
+                  <button
+                    key={ws.id}
+                    type="button"
+                    onClick={() => onSelectWorkspace(ws.id)}
+                    onDoubleClick={() => setRenamingWorkspaceId(ws.id)}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left transition-colors ${
+                      active ? 'bg-white/10 text-white font-medium' : 'text-white/65 hover:bg-white/[0.05] hover:text-white'
+                    }`}
+                    title={ws.name || 'Untitled workspace'}
+                  >
+                    <Box size={15} className="shrink-0 text-white/45" />
+                    <span className="flex-1 truncate">{ws.name || 'Untitled workspace'}</span>
+                  </button>
                 );
-              }
-              return (
-                <button
-                  key={c.todo.id}
-                  type="button"
-                  onClick={() => setSelectedView(c.todo.id)}
-                  onDoubleClick={() => setRenamingId(c.todo.id)}
-                  onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
-                  className={sidebarItemCls(c.todo.id)}
-                  title={c.todo.text || 'Untitled collection'}
-                >
-                  <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
-                  <span className="text-xs text-white/35">{collectionCount(c.todo.id)}</span>
-                </button>
-              );
-            })}
-
-            <div className="my-1.5 border-t border-white/8" />
-
-            {/* Uncategorized */}
+              })}
+            </div>
             <button
               type="button"
-              onClick={() => setSelectedView('uncategorized')}
-              className={sidebarItemCls('uncategorized')}
+              onClick={handleNewWorkspace}
+              title="New workspace"
+              className="shrink-0 mt-0.5 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
             >
-              <Inbox size={15} className="shrink-0 text-white/45" />
-              <span className="flex-1 truncate">Uncategorized</span>
-              <span className="text-xs text-white/35">{uncategorizedCount}</span>
+              <Plus size={15} />
+              <span>New workspace</span>
             </button>
+          </div>
+
+          {/* ── Collections section (bottom) ────────────────────────────────── */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Fixed header: title + the two pseudo-views as separate rows */}
+            <div className="shrink-0 p-2 pb-1 space-y-0.5">
+              <div className="px-2.5 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/30">
+                Collections
+              </div>
+              <button type="button" onClick={() => setSelectedView('all')} className={sidebarItemCls('all')} title="All Tasks">
+                <Layers size={15} className="shrink-0 text-white/45" />
+                <span className="flex-1 truncate">All Tasks</span>
+                <span className="text-xs text-white/35">{allCount}</span>
+              </button>
+              <button type="button" onClick={() => setSelectedView('uncategorized')} className={sidebarItemCls('uncategorized')} title="Uncategorized">
+                <Inbox size={15} className="shrink-0 text-white/45" />
+                <span className="flex-1 truncate">Uncategorized</span>
+                <span className="text-xs text-white/35">{uncategorizedCount}</span>
+              </button>
+            </div>
+
+            {/* Scrollable list of collections */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {collections.map((c) => {
+                const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
+                if (renamingId === c.todo.id) {
+                  return (
+                    <input
+                      key={c.todo.id}
+                      type="text"
+                      autoFocus
+                      defaultValue={c.todo.text}
+                      onChange={(e) => renameCollection(c, e.target.value)}
+                      onBlur={() => setRenamingId(null)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
+                      }}
+                      placeholder="Collection name"
+                      style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
+                      className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
+                    />
+                  );
+                }
+                return (
+                  <button
+                    key={c.todo.id}
+                    type="button"
+                    onClick={() => setSelectedView(c.todo.id)}
+                    onDoubleClick={() => setRenamingId(c.todo.id)}
+                    onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
+                    className={sidebarItemCls(c.todo.id)}
+                    title={c.todo.text || 'Untitled collection'}
+                  >
+                    <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
+                    <span className="text-xs text-white/35">{collectionCount(c.todo.id)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* New collection */}
@@ -679,6 +769,48 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           <span className="text-xs text-white/25">/</span>
           <span className="text-xs font-medium text-white/70 truncate max-w-[260px]">{viewLabel}</span>
           <span className="text-xs text-white/40">{currentCount} item{currentCount === 1 ? '' : 's'}</span>
+        </div>
+
+        {/* View toolbar — UI scaffold only; none of these are wired up yet. */}
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 pb-2.5">
+          {/* View tabs */}
+          <div className="flex items-center gap-1">
+            {([
+              { label: 'Table', icon: Table, active: true },
+              { label: 'List', icon: List, active: false },
+              { label: 'Timeline', icon: GanttChart, active: false },
+            ] as const).map(({ label, icon: Icon, active }) => (
+              <button
+                key={label}
+                type="button"
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ${
+                  active ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right-side actions */}
+          <div className="flex items-center gap-1">
+            {([
+              { label: 'Sections', icon: Group },
+              { label: 'Fields', icon: Columns3 },
+              { label: 'Filter', icon: Filter },
+              { label: 'Sort', icon: ArrowUpDown },
+            ] as const).map(({ label, icon: Icon }) => (
+              <button
+                key={label}
+                type="button"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] text-white/45 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Task table — single scroll container, both axes. */}
@@ -774,11 +906,25 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               position: 'fixed',
               left: editing.rect.left,
               top: editing.rect.bottom + 4,
-              width: Math.max(editing.rect.width, 260),
+              width: Math.max(editing.rect.width, editing.col === 'status' || editing.col === 'priority' ? 180 : 260),
             }}
             className="z-[58] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-2"
           >
-            {editing.col === 'tags' ? (
+            {editing.col === 'status' || editing.col === 'priority' ? (
+              <OptionSelectField
+                options={editing.col === 'status' ? STATUS_OPTIONS : PRIORITY_OPTIONS}
+                value={editing.col === 'status' ? editingEntry.todo.status : editingEntry.todo.priority}
+                onChange={(val) => {
+                  onSaveTodo(editingEntry.date, editingEntry.date, {
+                    ...editingEntry.todo,
+                    [editing.col]: val || undefined,
+                    // Status drives the checkbox: Completed ⇒ checked, anything else ⇒ unchecked.
+                    ...(editing.col === 'status' ? { completed: val === 'completed' } : {}),
+                  });
+                  stopEdit();
+                }}
+              />
+            ) : editing.col === 'tags' ? (
               <TagsField
                 tags={editingEntry.todo.tags || []}
                 allTags={allTags}
@@ -1028,14 +1174,15 @@ const HubRow: React.FC<HubRowProps> = ({
               onBlur={stopEdit}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               placeholder="Collection name"
+              size={1}
               style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
-              className="min-w-0 max-w-full rounded-full px-2.5 py-1 text-sm font-medium focus:outline-none placeholder:text-white/40"
+              className="w-auto min-w-[60px] max-w-full [field-sizing:content] rounded-full px-2.5 py-1 text-sm font-medium focus:outline-none placeholder:text-white/40"
             />
           ) : (
             <span
               onClick={(e) => startEdit(todo.id, 'title', e)}
               style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
-              className="min-w-0 max-w-full truncate rounded-full px-2.5 py-1 text-sm medium cursor-text"
+              className="min-w-0 max-w-full truncate rounded-full px-2.5 py-1 text-sm font-medium cursor-text"
             >
               {todo.text || 'Untitled collection'}
             </span>
@@ -1134,6 +1281,16 @@ const HubRow: React.FC<HubRowProps> = ({
           )}
         </div>
       </div>
+
+      {/* Status (opens popover) */}
+      <DisplayCell col="status">
+        {todo.status ? <OptionChip option={statusOption(todo.status)!} /> : muted}
+      </DisplayCell>
+
+      {/* Priority (opens popover) */}
+      <DisplayCell col="priority">
+        {todo.priority ? <OptionChip option={priorityOption(todo.priority)!} /> : muted}
+      </DisplayCell>
 
       {/* Date */}
       {isEditing('date') ? (

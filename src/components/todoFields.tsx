@@ -1,9 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { Circle, X, Tag as TagIcon } from 'lucide-react';
+import { Circle, X, Tag as TagIcon, Check } from 'lucide-react';
 import CheckCircleCutout from '../assets/CheckCircleCutout';
 import { timeToPercentage, percentageToTime } from '../utils/timeUtils';
+import { TodoStatus, TodoPriority } from '../types';
 
 // ── Shared todo field editors ────────────────────────────────────────────────
 // Small controlled inputs for each todo field, shared by the full-view panel and
@@ -207,6 +208,98 @@ export const NotesField: React.FC<{
         'w-full bg-transparent resize-none text-sm text-white/80 placeholder:text-white/25 focus:outline-none leading-relaxed overflow-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/25'
       }
     />
+  );
+};
+
+// ── Status / Priority (solid-fill "cutout" pill chips) ───────────────────────
+// Unlike tags (tinted bg + colored text), these are full-color pills with a
+// contrasting black/white label so they pop as status badges.
+export interface ChipOption {
+  value: string;
+  label: string;
+  bg: string;   // solid pill background
+  text: string; // black or white, chosen for contrast against bg
+}
+
+export const STATUS_OPTIONS: ChipOption[] = [
+  { value: 'todo', label: 'Todo', bg: '#6b7280', text: '#ffffff' },         // gray
+  { value: 'in_progress', label: 'In Progress', bg: '#3b82f6', text: '#ffffff' }, // blue
+  { value: 'completed', label: 'Completed', bg: '#22c55e', text: '#06230f' }, // green
+];
+
+export const PRIORITY_OPTIONS: ChipOption[] = [
+  { value: 'low', label: 'Low', bg: '#64748b', text: '#ffffff' },     // slate
+  { value: 'medium', label: 'Medium', bg: '#f59e0b', text: '#241902' }, // amber
+  { value: 'high', label: 'High', bg: '#ef4444', text: '#ffffff' },    // red
+];
+
+export const statusOption = (v?: TodoStatus) => STATUS_OPTIONS.find((o) => o.value === v);
+export const priorityOption = (v?: TodoPriority) => PRIORITY_OPTIONS.find((o) => o.value === v);
+
+// A solid-fill pill chip (full color bg, contrasting label).
+export const OptionChip: React.FC<{ option: ChipOption; className?: string }> = ({ option, className = '' }) => (
+  <span
+    style={{ backgroundColor: option.bg, color: option.text }}
+    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${className}`}
+  >
+    {option.label}
+  </span>
+);
+
+// Single-select picker over a fixed option set. `variant`:
+//   • 'menu'   — vertical list (used in the table's popover, mirroring tags)
+//   • 'inline' — wrapped row of chips (used in the full view)
+// Clicking the active option again clears the field.
+export const OptionSelectField: React.FC<{
+  options: ChipOption[];
+  value?: string;
+  onChange: (value: string | undefined) => void;
+  variant?: 'menu' | 'inline';
+}> = ({ options, value, onChange, variant = 'menu' }) => {
+  if (variant === 'inline') {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(selected ? undefined : opt.value)}
+              style={{ backgroundColor: opt.bg, color: opt.text }}
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                selected
+                  ? 'ring-2 ring-white/70 ring-offset-1 ring-offset-[#1A1A1A]'
+                  : 'opacity-45 hover:opacity-100'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      {options.map((opt) => {
+        const selected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange(selected ? undefined : opt.value)}
+            className={`w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left transition-colors ${
+              selected ? 'bg-white/10' : 'hover:bg-white/5'
+            }`}
+          >
+            <OptionChip option={opt} />
+            {selected && <Check size={14} className="ml-auto text-white/60" />}
+          </button>
+        );
+      })}
+    </div>
   );
 };
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Clock, LayoutGrid, List, Maximize2, Minimize2 } from 'lucide-react';
-import { Tracker, Theme, DayTodos, Todo } from './types';
+import { Tracker, Theme, DayTodos, Todo, Workspace } from './types';
 import { TrackerCard } from './components/TrackerCard';
 import { AddTrackerModal } from './components/AddTrackerModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -101,6 +101,36 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dun-active-view', activeView);
   }, [activeView]);
+
+  // ── Task Planner workspaces (independent todo databases) ───────────────────
+  const DEFAULT_WORKSPACE: Workspace = { id: 'personal', name: 'Personal' };
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('dun-workspaces') || 'null');
+      return Array.isArray(saved) && saved.length ? saved : [DEFAULT_WORKSPACE];
+    } catch {
+      return [DEFAULT_WORKSPACE];
+    }
+  });
+  useEffect(() => { localStorage.setItem('dun-workspaces', JSON.stringify(workspaces)); }, [workspaces]);
+
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
+    () => localStorage.getItem('dun-active-workspace') || 'personal'
+  );
+  useEffect(() => { localStorage.setItem('dun-active-workspace', activeWorkspaceId); }, [activeWorkspaceId]);
+  // Guard against a dangling active id (e.g. a deleted workspace).
+  useEffect(() => {
+    if (!workspaces.some(w => w.id === activeWorkspaceId)) setActiveWorkspaceId('personal');
+  }, [workspaces, activeWorkspaceId]);
+
+  const addWorkspace = (): string => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setWorkspaces(prev => [...prev, { id, name: '' }]);
+    setActiveWorkspaceId(id);
+    return id;
+  };
+  const renameWorkspace = (id: string, name: string) =>
+    setWorkspaces(prev => prev.map(w => (w.id === id ? { ...w, name } : w)));
   const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
     const saved = localStorage.getItem('dun-todos');
     return saved ? JSON.parse(saved) : [];
@@ -265,9 +295,16 @@ export default function App() {
   const handleToggleTodo = (todoId: string) => {
     setDayTodos(prev => prev.map(day => ({
       ...day,
-      todos: day.todos.map(todo =>
-        todo.id === todoId ? { ...todo, completed: !todo.completed } : todo
-      )
+      todos: day.todos.map(todo => {
+        if (todo.id !== todoId) return todo;
+        const completed = !todo.completed;
+        // Keep the workflow status in sync with the checkbox: checking marks the
+        // task Completed; unchecking a Completed task drops it back to Todo.
+        let status = todo.status;
+        if (completed) status = 'completed';
+        else if (todo.status === 'completed') status = 'todo';
+        return { ...todo, completed, status };
+      })
     })));
 
     // If we're toggling the active todo, close the tracker
@@ -341,6 +378,7 @@ export default function App() {
       text: '',
       completed: false,
       showInDatabase: true,
+      workspaceId: activeWorkspaceId,
       ...(parentId ? { parentId } : {}),
       hubOrder: maxOrder + 1,
       createdAt: Date.now(),
@@ -370,6 +408,7 @@ export default function App() {
       isCollection: true,
       color: '#9ca3af',
       parentId: null,
+      workspaceId: activeWorkspaceId,
       hubOrder: maxOrder + 1,
       createdAt: Date.now(),
     };
@@ -600,6 +639,11 @@ export default function App() {
                   onAddTodo={handleHubAddTodo}
                   onAddSubtask={handleAddSubtask}
                   onAddCollection={addHubCollection}
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onSelectWorkspace={setActiveWorkspaceId}
+                  onAddWorkspace={addWorkspace}
+                  onRenameWorkspace={renameWorkspace}
                   onDeleteTodo={handleDeleteTodoById}
                   onArchiveTodo={handleArchiveTodo}
                   onReorder={handleReorderHubTodos}

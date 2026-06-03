@@ -21,10 +21,23 @@ export interface Theme {
   accent2: string; // Secondary accent (e.g. #a2beb7)
 }
 
+export type TodoStatus = 'todo' | 'in_progress' | 'completed';
+export type TodoPriority = 'low' | 'medium' | 'high';
+
+// A Workspace is an independent database of Task Planner todos + collections.
+// Todos are scoped to a workspace via Todo.workspaceId ('personal' is the
+// default workspace; todos without an id are treated as belonging to it).
+export interface Workspace {
+  id: string;
+  name: string;
+}
+
 export interface Todo {
   id: string;
   text: string;       // Todo name
   completed: boolean;
+  status?: TodoStatus;     // Workflow state (Task Planner). Rendered as a solid pill.
+  priority?: TodoPriority; // Importance (Task Planner). Rendered as a solid pill.
   percentageGoal?: number; // e.g. 50
   startTime?: string; // HH:MM format for calendar start
   endTime?: string;   // HH:MM format for calendar end
@@ -52,6 +65,9 @@ export interface Todo {
                               // task fields (date/time/percent/xp/tags/notes).
   color?: string;             // Collection pill color (hex). Only meaningful when
                               // isCollection is true.
+  workspaceId?: string;       // Task Planner workspace this todo/collection belongs
+                              // to. Undefined is treated as the default 'personal'
+                              // workspace. See Workspace above.
 }
 
 export interface DayTodos {
