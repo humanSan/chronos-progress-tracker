@@ -92,7 +92,15 @@ export default function App() {
     const saved = localStorage.getItem('dun-theme');
     return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
   });
-  const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'hub' | 'calendar' | 'stats'>('todos');
+  const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'hub' | 'calendar' | 'stats'>(() => {
+    const saved = localStorage.getItem('dun-active-view');
+    return saved === 'trackers' || saved === 'todos' || saved === 'hub' || saved === 'calendar' || saved === 'stats'
+      ? saved
+      : 'todos';
+  });
+  useEffect(() => {
+    localStorage.setItem('dun-active-view', activeView);
+  }, [activeView]);
   const [dayTodos, setDayTodos] = useState<DayTodos[]>(() => {
     const saved = localStorage.getItem('dun-todos');
     return saved ? JSON.parse(saved) : [];
@@ -347,6 +355,33 @@ export default function App() {
   const handleHubAddTodo = () => addHubTodo(null);
   const handleAddSubtask = (parentId: string) => addHubTodo(parentId);
 
+  // Create a fresh top-level collection (section) in the hub and return its id so
+  // the Task Planner can select + inline-rename it immediately.
+  const addHubCollection = (): string => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const maxOrder = dayTodos
+      .flatMap(d => d.todos || [])
+      .reduce((m, t) => Math.max(m, t?.hubOrder ?? 0), 0);
+    const newCollection: Todo = {
+      id,
+      text: '',
+      completed: false,
+      showInDatabase: true,
+      isCollection: true,
+      color: '#9ca3af',
+      parentId: null,
+      hubOrder: maxOrder + 1,
+      createdAt: Date.now(),
+    };
+    setDayTodos(prev => {
+      const existing = prev.find(d => d.date === UNDATED);
+      return existing
+        ? prev.map(d => d.date === UNDATED ? { ...d, todos: [...(d.todos || []), newCollection] } : d)
+        : [...prev, { date: UNDATED, todos: [newCollection] }];
+    });
+    return id;
+  };
+
   // Remove a todo entirely (cascading to its subtasks).
   const handleDeleteTodoById = (id: string) => {
     setDayTodos(prev => {
@@ -409,7 +444,7 @@ export default function App() {
         isStopwatchActive={timerState !== 'idle'}
       />
 
-      <div className={`transition-all duration-500 ${!isFullscreen ? 'pl-20' : 'pl-0'}`}>
+      <div className={`transition-all duration-500 ${!isFullscreen ? 'pl-14' : 'pl-0'}`}>
         {/* Header */}
           {!isFullscreen && activeView === 'trackers' && (
             <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-md border-bottom border-white/5">
@@ -564,6 +599,7 @@ export default function App() {
                   onSaveTodo={handleHubSaveTodo}
                   onAddTodo={handleHubAddTodo}
                   onAddSubtask={handleAddSubtask}
+                  onAddCollection={addHubCollection}
                   onDeleteTodo={handleDeleteTodoById}
                   onArchiveTodo={handleArchiveTodo}
                   onReorder={handleReorderHubTodos}

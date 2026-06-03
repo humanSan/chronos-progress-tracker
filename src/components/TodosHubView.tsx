@@ -34,6 +34,10 @@ import {
   CornerDownRight,
   FolderPlus,
   Palette,
+  Layers,
+  Inbox,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { DayTodos, Todo } from '../types';
 import { getOrganizerTodos, OrganizerEntry, hasDate } from '../utils/todoFilters';
@@ -57,6 +61,8 @@ interface TodosHubViewProps {
   onSaveTodo: (oldDate: string | null, newDate: string | null, updatedTodo: Todo) => void;
   onAddTodo: () => void;
   onAddSubtask: (parentId: string) => void;
+  // Create a fresh top-level collection; returns its id for select + rename.
+  onAddCollection: () => string;
   onDeleteTodo: (id: string) => void;
   onArchiveTodo: (id: string) => void;
   // Persist hub order + nesting (position = hubOrder, parentId = nesting).
@@ -105,8 +111,18 @@ const COLLECTION_COLORS = [
 ];
 const DEFAULT_COLLECTION_COLOR = COLLECTION_COLORS[0];
 
+// Pill label color: lighten the collection color toward white so the name reads
+// with high contrast against the dark tinted-bg pill.
+const pillTextColor = (color: string) => `color-mix(in srgb, ${color} 55%, white)`;
+
 const WIDTHS_KEY = 'dun-hub-col-widths';
 const COLLAPSED_KEY = 'dun-hub-collapsed';
+const VIEW_KEY = 'dun-hub-view'; // which sidebar entry is selected ('all' | 'uncategorized' | collection id)
+const SIDEBAR_WIDTH_KEY = 'dun-hub-sidebar-width';
+const SIDEBAR_HIDDEN_KEY = 'dun-hub-sidebar-hidden';
+const MIN_SIDEBAR_WIDTH = 170;
+const MAX_SIDEBAR_WIDTH = 480;
+const DEFAULT_SIDEBAR_WIDTH = 224;
 
 type EditState = { id: string; col: ColKey; rect: DOMRect } | null;
 
@@ -229,6 +245,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   onSaveTodo,
   onAddTodo,
   onAddSubtask,
+  onAddCollection,
   onDeleteTodo,
   onArchiveTodo,
   onReorder,
@@ -342,6 +359,128 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   };
   const setCollectionColor = (entry: OrganizerEntry, color: string) =>
     onSaveTodo(entry.date, entry.date, { ...entry.todo, color });
+  const renameCollection = (entry: OrganizerEntry, text: string) =>
+    onSaveTodo(entry.date, entry.date, { ...entry.todo, text });
+
+  // ── Sidebar selection (which collection / view the table shows) ────────────
+  const [selectedView, setSelectedView] = useState<string>(
+    () => localStorage.getItem(VIEW_KEY) || 'all'
+  );
+  useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  // ── Left-pane sizing (persisted) ───────────────────────────────────────────
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return saved >= MIN_SIDEBAR_WIDTH && saved <= MAX_SIDEBAR_WIDTH ? saved : DEFAULT_SIDEBAR_WIDTH;
+  });
+  useEffect(() => { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); }, [sidebarWidth]);
+  const [sidebarHidden, setSidebarHidden] = useState<boolean>(
+    () => localStorage.getItem(SIDEBAR_HIDDEN_KEY) === '1'
+  );
+  useEffect(() => { localStorage.setItem(SIDEBAR_HIDDEN_KEY, sidebarHidden ? '1' : '0'); }, [sidebarHidden]);
+
+  const startSidebarResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, startW + (ev.clientX - startX)));
+      setSidebarWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // A real collection is selected (vs. the 'all' / 'uncategorized' pseudo-views).
+  const selectedCollectionId =
+    selectedView !== 'all' && selectedView !== 'uncategorized' ? selectedView : null;
+
+  // Ancestry helpers over the current entry set.
+  const byId = useMemo(() => new Map(entries.map((e) => [e.todo.id, e])), [entries]);
+  const hasCollectionAncestor = (e: OrganizerEntry): boolean => {
+    let p = e.todo.parentId ?? null;
+    const seen = new Set<string>();
+    while (p && byId.has(p) && !seen.has(p)) {
+      seen.add(p);
+      const pe = byId.get(p)!;
+      if (pe.todo.isCollection) return true;
+      p = pe.todo.parentId ?? null;
+    }
+    return false;
+  };
+  const isDescendantOf = (e: OrganizerEntry, cid: string): boolean => {
+    let p = e.todo.parentId ?? null;
+    const seen = new Set<string>();
+    while (p && byId.has(p) && !seen.has(p)) {
+      if (p === cid) return true;
+      seen.add(p);
+      p = byId.get(p)!.todo.parentId ?? null;
+    }
+    return false;
+  };
+
+  // Collections list for the sidebar (top-level sections, in hub order).
+  const collections = useMemo(
+    () =>
+      entries
+        .filter((e) => e.todo.isCollection)
+        .sort((a, b) => (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt)),
+    [entries]
+  );
+
+  // If the selected collection was deleted/archived, fall back to All.
+  useEffect(() => {
+    if (selectedCollectionId && !collections.some((c) => c.todo.id === selectedCollectionId)) {
+      setSelectedView('all');
+    }
+  }, [selectedCollectionId, collections]);
+
+  // The entries the table renders for the current view.
+  //   • 'all'          → everything (collections show inline as pill headers)
+  //   • 'uncategorized'→ tasks with no collection ancestor (collections excluded)
+  //   • a collection id→ that collection's descendants (the collection node itself
+  //     is excluded, so its direct children render at depth 0)
+  const viewEntries = useMemo(() => {
+    if (selectedView === 'all') return entries;
+    if (selectedView === 'uncategorized')
+      return entries.filter((e) => !e.todo.isCollection && !hasCollectionAncestor(e));
+    return entries.filter((e) => isDescendantOf(e, selectedView));
+  }, [entries, selectedView, byId]);
+
+  // Sidebar counts (tasks only, collections never counted).
+  const allCount = entries.filter((e) => !e.todo.isCollection).length;
+  const uncategorizedCount = entries.filter(
+    (e) => !e.todo.isCollection && !hasCollectionAncestor(e)
+  ).length;
+  const collectionCount = (cid: string) =>
+    entries.filter((e) => !e.todo.isCollection && isDescendantOf(e, cid)).length;
+
+  const currentCount = selectedCollectionId
+    ? collectionCount(selectedCollectionId)
+    : selectedView === 'uncategorized'
+      ? uncategorizedCount
+      : allCount;
+  const selectedCollectionEntry = selectedCollectionId ? byId.get(selectedCollectionId) || null : null;
+  const viewLabel = selectedCollectionId
+    ? selectedCollectionEntry?.todo.text || 'Untitled collection'
+    : selectedView === 'uncategorized'
+      ? 'Uncategorized'
+      : 'All Tasks';
+
+  const handleNewCollection = () => {
+    const id = onAddCollection();
+    setSelectedView(id);
+    setRenamingId(id);
+  };
+  // The table's "New" button adds into the selected collection, else top-level.
+  const handleNewInView = selectedCollectionId
+    ? () => onAddSubtask(selectedCollectionId)
+    : onAddTodo;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -359,8 +498,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // Rendered rows: collapsed children hidden, and the active subtree collapsed
   // into its single row while dragging.
   const flattened = useMemo(
-    () => flattenTree(entries, { collapsed, excludeId: activeId ?? undefined }),
-    [entries, collapsed, activeId]
+    () => flattenTree(viewEntries, { collapsed, excludeId: activeId ?? undefined }),
+    [viewEntries, collapsed, activeId]
   );
   const ids = flattened.map((f) => f.id);
 
@@ -387,13 +526,21 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     const proj =
       over ? getProjection(flattened, active.id as string, over.id as string, offsetLeft, INDENT) : null;
     if (over && proj) {
-      const cloned = flattenTree(entries); // full order, nothing hidden
+      const cloned = flattenTree(viewEntries); // full order of the visible view, nothing hidden
       const overIndex = cloned.findIndex((i) => i.id === over.id);
       const activeIndex = cloned.findIndex((i) => i.id === active.id);
       if (activeIndex !== -1 && overIndex !== -1) {
         cloned[activeIndex] = { ...cloned[activeIndex], parentId: proj.parentId };
         const sorted = arrayMove(cloned, activeIndex, overIndex);
-        onReorder(orderFromFlat(sorted.map((n) => ({ id: n.id, parentId: n.parentId }))));
+        // In a collection view the collection node is hidden, so its direct
+        // children read as depth-0 (parentId null). Re-anchor them to the
+        // collection on save so they keep their membership.
+        const order = orderFromFlat(sorted.map((n) => ({ id: n.id, parentId: n.parentId })));
+        onReorder(
+          selectedCollectionId
+            ? order.map((n) => ({ id: n.id, parentId: n.parentId ?? selectedCollectionId }))
+            : order
+        );
       }
     }
     resetDrag();
@@ -421,16 +568,121 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const headerCellCls =
     'relative flex items-center px-2.5 text-xs font-semibold tracking-wide text-white/75 select-none';
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* Page header — tight, Notion-like */}
-      <div className="shrink-0 flex items-baseline gap-3 px-7.5 pt-4 pb-3">
-        <h1 className="text-lg font-bold">Task Planner</h1>
-        <span className="text-xs text-white/50">{entries.length} item{entries.length === 1 ? '' : 's'}</span>
-      </div>
+  const sidebarItemCls = (view: string) =>
+    `w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left transition-colors ${
+      selectedView === view
+        ? 'bg-white/10 text-white font-medium'
+        : 'text-white/65 hover:bg-white/[0.05] hover:text-white'
+    }`;
 
-      {/* Single scroll container — both axes (spreadsheet style) */}
-      <div className="flex-1 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+  return (
+    <div className="h-full flex">
+      {/* Left pane — full-height collection picker (resizable) */}
+      {!sidebarHidden && (
+        <aside
+          style={{ width: sidebarWidth }}
+          className="relative shrink-0 flex flex-col min-h-0 border-r border-white/10"
+        >
+          <div className="flex-1 overflow-y-auto p-2 pt-4 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+            {/* All Tasks */}
+            <button type="button" onClick={() => setSelectedView('all')} className={sidebarItemCls('all')}>
+              <Layers size={15} className="shrink-0 text-white/45" />
+              <span className="flex-1 truncate">All Tasks</span>
+              <span className="text-xs text-white/35">{allCount}</span>
+            </button>
+
+            {collections.length > 0 && <div className="my-1.5 border-t border-white/8" />}
+
+            {/* Collections */}
+            {collections.map((c) => {
+              const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
+              if (renamingId === c.todo.id) {
+                return (
+                  <input
+                    key={c.todo.id}
+                    type="text"
+                    autoFocus
+                    defaultValue={c.todo.text}
+                    onChange={(e) => renameCollection(c, e.target.value)}
+                    onBlur={() => setRenamingId(null)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
+                    }}
+                    placeholder="Collection name"
+                    style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
+                    className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
+                  />
+                );
+              }
+              return (
+                <button
+                  key={c.todo.id}
+                  type="button"
+                  onClick={() => setSelectedView(c.todo.id)}
+                  onDoubleClick={() => setRenamingId(c.todo.id)}
+                  onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
+                  className={sidebarItemCls(c.todo.id)}
+                  title={c.todo.text || 'Untitled collection'}
+                >
+                  <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
+                  <span className="text-xs text-white/35">{collectionCount(c.todo.id)}</span>
+                </button>
+              );
+            })}
+
+            <div className="my-1.5 border-t border-white/8" />
+
+            {/* Uncategorized */}
+            <button
+              type="button"
+              onClick={() => setSelectedView('uncategorized')}
+              className={sidebarItemCls('uncategorized')}
+            >
+              <Inbox size={15} className="shrink-0 text-white/45" />
+              <span className="flex-1 truncate">Uncategorized</span>
+              <span className="text-xs text-white/35">{uncategorizedCount}</span>
+            </button>
+          </div>
+
+          {/* New collection */}
+          <button
+            type="button"
+            onClick={handleNewCollection}
+            className="shrink-0 m-2 flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
+          >
+            <FolderPlus size={15} />
+            <span>New collection</span>
+          </button>
+
+          {/* Drag handle to resize the pane */}
+          <div
+            onMouseDown={startSidebarResize}
+            className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent2)]/40 transition-colors"
+          />
+        </aside>
+      )}
+
+      {/* Right pane — header + task table */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Page header — tight, Notion-like */}
+        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-4 pb-3">
+          <button
+            type="button"
+            onClick={() => setSidebarHidden((v) => !v)}
+            title={sidebarHidden ? 'Show collections' : 'Hide collections'}
+            className="shrink-0 p-1 -ml-0.5 rounded text-white/45 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            {sidebarHidden ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+          <h1 className="text-lg font-bold">Task Planner</h1>
+          <span className="text-xs text-white/25">/</span>
+          <span className="text-xs font-medium text-white/70 truncate max-w-[260px]">{viewLabel}</span>
+          <span className="text-xs text-white/40">{currentCount} item{currentCount === 1 ? '' : 's'}</span>
+        </div>
+
+        {/* Task table — single scroll container, both axes. */}
+        <div className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
         <div className="w-max min-w-full text-white">
           {/* Header row */}
           <div
@@ -489,22 +741,27 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           {/* Add row */}
           <button
             type="button"
-            onClick={onAddTodo}
+            onClick={handleNewInView}
             className="flex items-center gap-2 w-full h-9 px-3 text-sm text-white/60 hover:text-white hover:bg-white/[0.03] border-b border-white/8 cursor-pointer transition-colors"
           >
             <Plus size={14} />
             <span>New</span>
           </button>
 
-          {entries.length === 0 && (
+          {flattened.length === 0 && (
             <div className="px-3 py-6 text-xs text-white/50">
-              No database todos yet. Click “New”, or set <code>showInDatabase: true</code> on a todo.
+              {selectedCollectionId
+                ? 'No tasks in this collection yet. Click “New” to add one.'
+                : selectedView === 'uncategorized'
+                  ? 'No uncategorized tasks. Everything is filed in a collection.'
+                  : <>No database todos yet. Click “New”, or set <code>showInDatabase: true</code> on a todo.</>}
             </div>
           )}
 
           {/* Bottom dead space so the last row isn't flush to the edge and the
               right-click context menu has room to open fully below it. */}
           <div aria-hidden style={{ height: BOTTOM_SPACER }} />
+        </div>
         </div>
       </div>
 
@@ -696,7 +953,7 @@ const HubRow: React.FC<HubRowProps> = ({
   const { todo, date } = entry;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     gridTemplateColumns,
   };
@@ -729,7 +986,7 @@ const HubRow: React.FC<HubRowProps> = ({
     return (
       <div
         ref={setNodeRef}
-        style={{ transform: CSS.Transform.toString(transform), transition }}
+        style={{ transform: CSS.Translate.toString(transform), transition }}
         onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
         className={`flex items-end w-full min-h-[58px] border-b border-white/8 group/row ${
           isDragging ? 'relative z-10 bg-[#262626] ring-1 ring-[var(--accent2)]/50 rounded-sm' : 'hover:bg-white/[0.015]'
@@ -771,13 +1028,13 @@ const HubRow: React.FC<HubRowProps> = ({
               onBlur={stopEdit}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               placeholder="Collection name"
-              style={{ backgroundColor: `${color}26`, color }}
+              style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
               className="min-w-0 max-w-full rounded-full px-2.5 py-1 text-sm font-medium focus:outline-none placeholder:text-white/40"
             />
           ) : (
             <span
               onClick={(e) => startEdit(todo.id, 'title', e)}
-              style={{ backgroundColor: `${color}26`, color }}
+              style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
               className="min-w-0 max-w-full truncate rounded-full px-2.5 py-1 text-sm medium cursor-text"
             >
               {todo.text || 'Untitled collection'}
