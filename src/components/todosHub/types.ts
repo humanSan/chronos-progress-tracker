@@ -62,6 +62,30 @@ export interface SortRule {
   direction: 'asc' | 'desc';
 }
 
+// ── Sections / view-layout settings ──────────────────────────────────────────
+export interface SectionsConfig {
+  // Auto-archive a task the moment it is toggled to completed.
+  autoArchive: boolean;
+  // Whether non-collection tasks appear before or after collections at each level.
+  showLeafTasks: 'top' | 'bottom' | 'none';
+  // Hide collections that have no visible tasks in the current view.
+  hideEmptyCollections: boolean;
+  // Which field drives the section headers. 'collection' = default tree mode.
+  groupBy: ColKey;
+}
+
+export const DEFAULT_SECTIONS_CONFIG: SectionsConfig = {
+  autoArchive: false,
+  showLeafTasks: 'none',
+  hideEmptyCollections: false,
+  groupBy: 'collection',
+};
+
+// A single row in the grouped-mode table (either a virtual group header or a task).
+export type GroupRow =
+  | { type: 'header'; id: string; label: string; color: string; count: number; isCollapsed: boolean }
+  | { type: 'task'; node: FlatNode };
+
 // A todo placed in the tree: its structural parent + depth + display order.
 export interface FlatNode {
   id: string;

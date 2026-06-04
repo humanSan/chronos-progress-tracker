@@ -62,7 +62,7 @@ import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
 } from './todoFields';
-import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule } from './todosHub/types';
+import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule, SectionsConfig, DEFAULT_SECTIONS_CONFIG, GroupRow } from './todosHub/types';
 import {
   MIN_COL_WIDTH,
   INDENT,
@@ -83,11 +83,13 @@ import {
   DEFAULT_SIDEBAR_WIDTH,
 } from './todosHub/constants';
 import { flattenTree, getProjection, orderFromFlat } from './todosHub/treeUtils';
-import { getFieldDisplayValue, getFieldRawValue, compareRawValues, matchesFilter } from './todosHub/viewUtils';
+import { getFieldDisplayValue, getFieldRawValue, compareRawValues, matchesFilter, buildGroupedItems } from './todosHub/viewUtils';
 import { HubRow } from './todosHub/HubRow';
 import { FieldsMenu } from './todosHub/FieldsMenu';
 import { FilterMenu } from './todosHub/FilterMenu';
 import { SortMenu } from './todosHub/SortMenu';
+import { SectionsMenu } from './todosHub/SectionsMenu';
+import { GroupHeaderRow } from './todosHub/GroupHeaderRow';
 import { CollectionEditModal } from './todosHub/CollectionEditModal';
 
 interface TodosHubViewProps {
@@ -216,15 +218,23 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         (k: string): k is ColKey => k !== NAME_COL_KEY && allColKeys.includes(k as ColKey)
       )
     );
+    const raw_sections = raw.sections ?? {};
+    const sections: SectionsConfig = {
+      autoArchive:          raw_sections.autoArchive          ?? DEFAULT_SECTIONS_CONFIG.autoArchive,
+      showLeafTasks:        raw_sections.showLeafTasks        ?? DEFAULT_SECTIONS_CONFIG.showLeafTasks,
+      hideEmptyCollections: raw_sections.hideEmptyCollections ?? DEFAULT_SECTIONS_CONFIG.hideEmptyCollections,
+      groupBy:              raw_sections.groupBy              ?? DEFAULT_SECTIONS_CONFIG.groupBy,
+    };
     return {
       fieldOrder,
       hiddenFields,
       filters: (Array.isArray(raw.filters) ? raw.filters : []) as FilterRule[],
-      sorts: (Array.isArray(raw.sorts) ? raw.sorts : []) as SortRule[],
+      sorts:   (Array.isArray(raw.sorts)   ? raw.sorts   : []) as SortRule[],
+      sections,
     };
   }, [viewsConfig, viewConfigKey]);
 
-  const { fieldOrder, hiddenFields, filters: activeFilters, sorts: activeSorts } = currentViewState;
+  const { fieldOrder, hiddenFields, filters: activeFilters, sorts: activeSorts, sections: sectionsConfig } = currentViewState;
 
   // Persist any view-state update (partial merge).
   const updateViewState = (patch: {
@@ -232,14 +242,16 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     hiddenFields?: Set<ColKey>;
     filters?: FilterRule[];
     sorts?: SortRule[];
+    sections?: SectionsConfig;
   }) => {
     setViewsConfig((prev) => ({
       ...prev,
       [viewConfigKey]: {
-        fieldOrder: patch.fieldOrder ?? fieldOrder,
+        fieldOrder:  patch.fieldOrder  ?? fieldOrder,
         hiddenFields: [...(patch.hiddenFields ?? hiddenFields)],
-        filters: patch.filters ?? activeFilters,
-        sorts: patch.sorts ?? activeSorts,
+        filters:     patch.filters     ?? activeFilters,
+        sorts:       patch.sorts       ?? activeSorts,
+        sections:    patch.sections    ?? sectionsConfig,
       },
     }));
   };
@@ -272,12 +284,14 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const lastColKey = visibleColumns[visibleColumns.length - 1]?.key ?? NAME_COL_KEY;
 
   // ── Toolbar menu anchor states ────────────────────────────────────────────────
+  const [sectionsMenu, setSectionsMenu] = useState<{ right: number; top: number } | null>(null);
   const [fieldsMenu, setFieldsMenu] = useState<{ right: number; top: number } | null>(null);
   const [filterMenu, setFilterMenu] = useState<{ right: number; top: number } | null>(null);
   const [sortMenu, setSortMenu] = useState<{ right: number; top: number } | null>(null);
 
   // Close all toolbar menus when the sidebar view changes.
   useEffect(() => {
+    setSectionsMenu(null);
     setFieldsMenu(null);
     setFilterMenu(null);
     setSortMenu(null);
@@ -592,6 +606,21 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     );
   }, [viewEntries, activeFilters, todoById]);
 
+  // Hide collections that have no visible task descendants (optional section setting).
+  const processedEntries = useMemo(() => {
+    if (!sectionsConfig.hideEmptyCollections) return filteredEntries;
+    const collWithTasks = new Set<string>();
+    for (const e of filteredEntries) {
+      if (e.todo.isCollection) continue;
+      let p: string | null = e.todo.parentId ?? null;
+      while (p && byId.has(p)) {
+        collWithTasks.add(p);
+        p = byId.get(p)!.todo.parentId ?? null;
+      }
+    }
+    return filteredEntries.filter((e) => !e.todo.isCollection || collWithTasks.has(e.todo.id));
+  }, [filteredEntries, sectionsConfig.hideEmptyCollections, byId]);
+
   // Build a sort comparator from the active sort rules.
   const sortFn = useMemo(() => {
     if (!activeSorts.length) return undefined;
@@ -605,6 +634,28 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       return 0;
     };
   }, [activeSorts, todoById]);
+
+  // Visible (post-filter) task count per collection, used for the header chip counts.
+  const visibleTaskCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of processedEntries) {
+      if (e.todo.isCollection) continue;
+      let p: string | null = e.todo.parentId ?? null;
+      const seen = new Set<string>();
+      while (p && byId.has(p) && !seen.has(p)) {
+        seen.add(p);
+        counts.set(p, (counts.get(p) ?? 0) + 1);
+        p = byId.get(p)!.todo.parentId ?? null;
+      }
+    }
+    return counts;
+  }, [processedEntries, byId]);
+
+  // Grouped rows — only used when groupBy !== 'collection'.
+  const groupedRows = useMemo((): GroupRow[] => {
+    if (sectionsConfig.groupBy === 'collection') return [];
+    return buildGroupedItems(processedEntries, sectionsConfig.groupBy, todoById, collapsed, sortFn, sectionsConfig.showLeafTasks);
+  }, [sectionsConfig.groupBy, processedEntries, todoById, collapsed, sortFn]);
 
   // Sidebar counts (tasks only, collections never counted).
   const allCount = entries.filter((e) => !e.todo.isCollection).length;
@@ -652,7 +703,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setEditing(null); setMenu(null); setColorPickerOpen(false);
-        setFieldsMenu(null); setFilterMenu(null); setSortMenu(null);
+        setSectionsMenu(null); setFieldsMenu(null); setFilterMenu(null); setSortMenu(null);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -664,12 +715,16 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const [overId, setOverId] = useState<string | null>(null);
   const [offsetLeft, setOffsetLeft] = useState(0);
 
-  // Rendered rows: collapsed children hidden, active subtree collapsed while dragging.
-  // filteredEntries (not viewEntries) respects active filter rules; sortFn applies
-  // user-defined sort order within each sibling group.
+  // Rendered rows for collection-grouped (default) mode. processedEntries respects
+  // filters + hideEmptyCollections. leafPosition segregates tasks vs sub-collections.
   const flattened = useMemo(
-    () => flattenTree(filteredEntries, { collapsed, excludeId: activeId ?? undefined, sortFn }),
-    [filteredEntries, collapsed, activeId, sortFn]
+    () => flattenTree(processedEntries, {
+      collapsed,
+      excludeId: activeId ?? undefined,
+      sortFn,
+      leafPosition: sectionsConfig.showLeafTasks !== 'none' ? sectionsConfig.showLeafTasks : undefined,
+    }),
+    [processedEntries, collapsed, activeId, sortFn, sectionsConfig.showLeafTasks]
   );
   const ids = flattened.map((f) => f.id);
 
@@ -682,6 +737,19 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
   const resetDrag = () => { setActiveId(null); setOverId(null); setOffsetLeft(0); };
 
+  // Auto-archive: when a task is being completed and the setting is on, archive
+  // it immediately instead of just toggling the checkbox.
+  const handleToggleTodo = (id: string) => {
+    if (sectionsConfig.autoArchive) {
+      const entry = entries.find((e) => e.todo.id === id);
+      if (entry && !entry.todo.completed) {
+        onArchiveTodo(id);
+        return;
+      }
+    }
+    onToggleTodo(id);
+  };
+
   const handleDragStart = ({ active }: DragStartEvent) => {
     setActiveId(active.id as string);
     setOverId(active.id as string);
@@ -693,10 +761,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const handleDragOver = ({ over }: DragOverEvent) => setOverId((over?.id as string) ?? null);
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    // In grouped mode, drag has no persistent effect — just reset the visual.
+    if (sectionsConfig.groupBy !== 'collection') { resetDrag(); return; }
     const proj =
       over ? getProjection(flattened, active.id as string, over.id as string, offsetLeft, INDENT) : null;
     if (over && proj) {
-      const cloned = flattenTree(filteredEntries); // full order of the visible view, nothing hidden
+      const cloned = flattenTree(processedEntries); // full order of the visible view, nothing hidden
       const overIndex = cloned.findIndex((i) => i.id === over.id);
       const activeIndex = cloned.findIndex((i) => i.id === active.id);
       if (activeIndex !== -1 && overIndex !== -1) {
@@ -955,8 +1025,19 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
           {/* Right-side actions */}
           <div className="flex items-center gap-1">
-            {/* Sections — placeholder, not yet wired */}
-            <button type="button" className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] text-white/45 hover:text-white hover:bg-white/5 transition-colors">
+            {/* Sections */}
+            <button
+              type="button"
+              onClick={(e) => {
+                if (sectionsMenu) { setSectionsMenu(null); return; }
+                setFieldsMenu(null); setFilterMenu(null); setSortMenu(null);
+                const r = e.currentTarget.getBoundingClientRect();
+                setSectionsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
+                sectionsMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+              }`}
+            >
               <Group size={14} /> Sections
             </button>
 
@@ -1053,7 +1134,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         <div className="w-max min-w-full text-white" style={{ paddingLeft: TABLE_PAD, paddingRight: TABLE_PAD }}>
           
 
-          {/* Rows */}
+          {/* Rows — collection-tree mode (default) or flat grouped mode */}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -1063,27 +1144,66 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             onDragEnd={handleDragEnd}
             onDragCancel={resetDrag}
           >
-            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-              {flattened.map((node) => (
-                <HubRow
-                  key={node.id}
-                  node={node}
-                  displayDepth={activeId === node.id && projected ? projected.depth : node.depth}
-                  gridTemplateColumns={gridTemplateColumns}
-                  editing={editing}
-                  startEdit={startEdit}
-                  stopEdit={stopEdit}
-                  onSaveTodo={onSaveTodo}
-                  onToggleTodo={onToggleTodo}
-                  openMenu={openMenu}
-                  isCollapsed={collapsed.has(node.id)}
-                  onToggleCollapse={toggleCollapse}
-                  collPath={collPathFor(node.entry.todo)}
-                  columns={visibleColumns}
-                  lastColKey={lastColKey}
-                />
-              ))}
-            </SortableContext>
+            {sectionsConfig.groupBy === 'collection' ? (
+              // Tree mode: normal DnD reorder + nesting
+              <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                {flattened.map((node) => (
+                  <HubRow
+                    key={node.id}
+                    node={node}
+                    displayDepth={activeId === node.id && projected ? projected.depth : node.depth}
+                    gridTemplateColumns={gridTemplateColumns}
+                    editing={editing}
+                    startEdit={startEdit}
+                    stopEdit={stopEdit}
+                    onSaveTodo={onSaveTodo}
+                    onToggleTodo={handleToggleTodo}
+                    openMenu={openMenu}
+                    isCollapsed={collapsed.has(node.id)}
+                    onToggleCollapse={toggleCollapse}
+                    collPath={collPathFor(node.entry.todo)}
+                    columns={visibleColumns}
+                    lastColKey={lastColKey}
+                    taskCount={node.entry.todo.isCollection ? (visibleTaskCounts.get(node.id) ?? 0) : undefined}
+                  />
+                ))}
+              </SortableContext>
+            ) : (
+              // Grouped mode: virtual section headers + flat task rows; no persistent reorder
+              <SortableContext
+                items={groupedRows.filter((r): r is Extract<GroupRow, { type: 'task' }> => r.type === 'task').map((r) => r.node.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {groupedRows.map((row) =>
+                  row.type === 'header' ? (
+                    <GroupHeaderRow
+                      key={row.id}
+                      row={row}
+                      onToggleCollapse={toggleCollapse}
+                    />
+                  ) : (
+                    <HubRow
+                      key={row.node.id}
+                      node={row.node}
+                      displayDepth={0}
+                      gridTemplateColumns={gridTemplateColumns}
+                      editing={editing}
+                      startEdit={startEdit}
+                      stopEdit={stopEdit}
+                      onSaveTodo={onSaveTodo}
+                      onToggleTodo={handleToggleTodo}
+                      openMenu={openMenu}
+                      isCollapsed={false}
+                      onToggleCollapse={toggleCollapse}
+                      collPath={collPathFor(row.node.entry.todo)}
+                      columns={visibleColumns}
+                      lastColKey={lastColKey}
+                      hideDragHandle
+                    />
+                  )
+                )}
+              </SortableContext>
+            )}
           </DndContext>
 
           {/* Add row */}
@@ -1096,7 +1216,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             <span>New</span>
           </button>
 
-          {flattened.length === 0 && (
+          {(sectionsConfig.groupBy === 'collection' ? flattened.length === 0 : groupedRows.length === 0) && (
             <div className="px-3 py-6 text-xs text-white/50">
               {selectedCollectionId
                 ? 'No tasks in this collection yet. Click “New” to add one.'
@@ -1112,6 +1232,17 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         </div>
         </div>
       </div>
+
+      {/* Sections menu — view-level settings */}
+      {sectionsMenu && createPortal(
+        <SectionsMenu
+          anchor={sectionsMenu}
+          config={sectionsConfig}
+          onChange={(cfg) => updateViewState({ sections: cfg })}
+          onClose={() => setSectionsMenu(null)}
+        />,
+        document.body
+      )}
 
       {/* Fields menu — reorder (drag) + show/hide the table's columns */}
       {fieldsMenu && createPortal(

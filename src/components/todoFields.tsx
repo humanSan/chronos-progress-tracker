@@ -211,35 +211,35 @@ export const NotesField: React.FC<{
   );
 };
 
-// ── Status / Priority (solid-fill "cutout" pill chips) ───────────────────────
-// Unlike tags (tinted bg + colored text), these are full-color pills with a
-// contrasting black/white label so they pop as status badges.
+// ── Status / Priority chips — same collection-style tinted pill ───────────────
 export interface ChipOption {
   value: string;
   label: string;
-  bg: string;   // solid pill background
-  text: string; // black or white, chosen for contrast against bg
+  color: string; // base color; chip renders as tinted bg + color-mixed text (like collection pills)
 }
 
 export const STATUS_OPTIONS: ChipOption[] = [
-  { value: 'todo', label: 'Todo', bg: '#6b7280', text: '#ffffff' },         // gray
-  { value: 'in_progress', label: 'In Progress', bg: '#3b82f6', text: '#ffffff' }, // blue
-  { value: 'completed', label: 'Completed', bg: '#22c55e', text: '#06230f' }, // green
+  { value: 'todo',        label: 'Todo',        color: '#6b7280' }, // gray
+  { value: 'in_progress', label: 'In Progress', color: '#3b82f6' }, // blue
+  { value: 'completed',   label: 'Completed',   color: '#22c55e' }, // green
 ];
 
 export const PRIORITY_OPTIONS: ChipOption[] = [
-  { value: 'low', label: 'Low', bg: '#64748b', text: '#ffffff' },     // slate
-  { value: 'medium', label: 'Medium', bg: '#f59e0b', text: '#241902' }, // amber
-  { value: 'high', label: 'High', bg: '#ef4444', text: '#ffffff' },    // red
+  { value: 'low',    label: 'Low',    color: '#64748b' }, // slate
+  { value: 'medium', label: 'Medium', color: '#f59e0b' }, // amber
+  { value: 'high',   label: 'High',   color: '#ef4444' }, // red
 ];
 
-export const statusOption = (v?: TodoStatus) => STATUS_OPTIONS.find((o) => o.value === v);
+export const statusOption   = (v?: TodoStatus)   => STATUS_OPTIONS.find((o)   => o.value === v);
 export const priorityOption = (v?: TodoPriority) => PRIORITY_OPTIONS.find((o) => o.value === v);
 
-// A solid-fill pill chip (full color bg, contrasting label).
+// Tinted-bg pill — matches the collection header pill style for visual consistency.
+const chipBg   = (c: string) => `${c}40`;
+const chipText = (c: string) => `color-mix(in srgb, ${c} 60%, white)`;
+
 export const OptionChip: React.FC<{ option: ChipOption; className?: string }> = ({ option, className = '' }) => (
   <span
-    style={{ backgroundColor: option.bg, color: option.text }}
+    style={{ backgroundColor: chipBg(option.color), color: chipText(option.color) }}
     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${className}`}
   >
     {option.label}
@@ -266,7 +266,7 @@ export const OptionSelectField: React.FC<{
               key={opt.value}
               type="button"
               onClick={() => onChange(selected ? undefined : opt.value)}
-              style={{ backgroundColor: opt.bg, color: opt.text }}
+              style={{ backgroundColor: chipBg(opt.color), color: chipText(opt.color) }}
               className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                 selected
                   ? 'ring-2 ring-white/70 ring-offset-1 ring-offset-[#1A1A1A]'

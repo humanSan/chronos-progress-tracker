@@ -37,6 +37,10 @@ interface HubRowProps {
   // Ordered, visible columns (Name first) — drives which cells render and in what order.
   columns: ColDef[];
   lastColKey: ColKey; // the rightmost visible column, which gets a right divider
+  // When true the drag handle is hidden (e.g. in grouped mode where DnD has no effect).
+  hideDragHandle?: boolean;
+  // Visible (post-filter) task count shown on collection header rows.
+  taskCount?: number;
 }
 
 export const HubRow: React.FC<HubRowProps> = ({
@@ -54,6 +58,8 @@ export const HubRow: React.FC<HubRowProps> = ({
   collPath,
   columns,
   lastColKey,
+  hideDragHandle = false,
+  taskCount,
 }) => {
   const { entry, hasChildren } = node;
   const { todo, date } = entry;
@@ -117,14 +123,16 @@ export const HubRow: React.FC<HubRowProps> = ({
             <span className="shrink-0 w-[20px]" />
           )}
 
-          <button
-            {...attributes}
-            {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-white/30 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
-            title="Drag to reorder"
-          >
-            <GripVertical size={14} className="mr-1" />
-          </button>
+          {!hideDragHandle && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="shrink-0 cursor-grab active:cursor-grabbing text-white/30 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
+              title="Drag to reorder"
+            >
+              <GripVertical size={14} className="mr-1" />
+            </button>
+          )}
 
           {isEditing('title') ? (
             <input
@@ -147,6 +155,10 @@ export const HubRow: React.FC<HubRowProps> = ({
             >
               {todo.text || 'Untitled collection'}
             </span>
+          )}
+
+          {taskCount !== undefined && !isEditing('title') && (
+            <span className="shrink-0 text-xs px-1.5 text-white/35 font-mono">{taskCount}</span>
           )}
 
           <button
@@ -274,7 +286,7 @@ export const HubRow: React.FC<HubRowProps> = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onToggleCollapse(todo.id); }}
-              className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
               title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
             >
               {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
@@ -283,14 +295,16 @@ export const HubRow: React.FC<HubRowProps> = ({
             <span className="shrink-0 w-[19px]" />
           )}
 
-          <button
-            {...attributes}
-            {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
-            title="Drag to reorder / nest"
-          >
-            <GripVertical size={14} className='mr-1' />
-          </button>
+          {!hideDragHandle && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="shrink-0 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
+              title="Drag to reorder / nest"
+            >
+              <GripVertical size={14} className='mr-1' />
+            </button>
+          )}
 
           <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} className='mr-1'/>
 

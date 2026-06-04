@@ -13,6 +13,9 @@ export function flattenTree(
     excludeId?: string;
     // When provided, siblings are sorted by this comparator instead of hubOrder.
     sortFn?: (a: OrganizerEntry, b: OrganizerEntry) => number;
+    // Segregate leaf tasks (non-collection items) to the top or bottom of each
+    // sibling group. 'none' preserves the mixed order (default).
+    leafPosition?: 'top' | 'bottom' | 'none';
   } = {}
 ): FlatNode[] {
   const ids = new Set(entries.map((e) => e.todo.id));
@@ -24,11 +27,19 @@ export function flattenTree(
     byParent.set(pid, arr);
   }
   for (const list of byParent.values()) {
-    if (opts.sortFn) {
-      list.sort(opts.sortFn);
-    } else {
-      list.sort((a, b) => (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt));
-    }
+    list.sort((a, b) => {
+      // Leaf segregation takes precedence when enabled
+      if (opts.leafPosition === 'top') {
+        const diff = (a.todo.isCollection ? 1 : 0) - (b.todo.isCollection ? 1 : 0);
+        if (diff !== 0) return diff;
+      } else if (opts.leafPosition === 'bottom') {
+        const diff = (a.todo.isCollection ? 0 : 1) - (b.todo.isCollection ? 0 : 1);
+        if (diff !== 0) return diff;
+      }
+      // Then by user sort or hubOrder
+      if (opts.sortFn) return opts.sortFn(a, b);
+      return (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt);
+    });
   }
   const out: FlatNode[] = [];
   const walk = (pid: string | null, depth: number) => {
