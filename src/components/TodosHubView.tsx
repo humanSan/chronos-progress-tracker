@@ -17,18 +17,13 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { AnimatePresence } from 'motion/react';
-import { format, parseISO } from 'date-fns';
 import {
-  GripVertical,
   Plus,
   Archive,
   Trash2,
   Maximize2,
-  MoreHorizontal,
   ChevronRight,
   ChevronDown,
   CornerDownRight,
@@ -48,11 +43,6 @@ import {
   Box,
   Shapes,
   Pencil,
-  X,
-  Check,
-  Eye,
-  EyeOff,
-  Lock,
 } from 'lucide-react';
 import { DayTodos, Todo, Workspace } from '../types';
 import {
@@ -64,25 +54,41 @@ import {
   collectionOf,
   collectionPath,
 } from '../utils/todoFilters';
-import { formatTime12h } from '../utils/timeUtils';
 import { TodoFullView } from './TodoFullView';
 import {
-  CompletedToggle,
-  DateField,
-  StartTimeField,
-  EndTimeField,
-  PercentField,
-  XpField,
   NotesField,
   CollectionSearchField,
-  CollectionBreadcrumb,
-  OptionChip,
   OptionSelectField,
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
-  statusOption,
-  priorityOption,
 } from './todoFields';
+import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule } from './todosHub/types';
+import {
+  MIN_COL_WIDTH,
+  INDENT,
+  TABLE_PAD,
+  BOTTOM_SPACER,
+  COLLECTION_COLORS,
+  DEFAULT_COLLECTION_COLOR,
+  WIDTHS_KEY,
+  VIEWS_KEY,
+  COLLAPSED_KEY,
+  VIEW_KEY,
+  SIDEBAR_WIDTH_KEY,
+  SIDEBAR_HIDDEN_KEY,
+  SIDEBAR_COLLAPSED_KEY,
+  SIDEBAR_INDENT,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+} from './todosHub/constants';
+import { flattenTree, getProjection, orderFromFlat } from './todosHub/treeUtils';
+import { getFieldDisplayValue, getFieldRawValue, compareRawValues, matchesFilter } from './todosHub/viewUtils';
+import { HubRow } from './todosHub/HubRow';
+import { FieldsMenu } from './todosHub/FieldsMenu';
+import { FilterMenu } from './todosHub/FilterMenu';
+import { SortMenu } from './todosHub/SortMenu';
+import { CollectionEditModal } from './todosHub/CollectionEditModal';
 
 interface TodosHubViewProps {
   dayTodos: DayTodos[];
@@ -111,217 +117,6 @@ interface TodosHubViewProps {
   onSelectWorkspace: (id: string) => void;
   onAddWorkspace: () => string;
   onRenameWorkspace: (id: string, name: string) => void;
-}
-
-// ── Column model ─────────────────────────────────────────────────────────────
-type ColKey = 'title' | 'status' | 'priority' | 'date' | 'start' | 'end' | 'percent' | 'collection' | 'xp' | 'notes';
-
-interface ColDef {
-  key: ColKey;
-  label: string;
-  defaultWidth: number;
-}
-
-const COLUMNS: ColDef[] = [
-  { key: 'title', label: 'Name', defaultWidth: 320 },
-  { key: 'status', label: 'Status', defaultWidth: 140 },
-  { key: 'priority', label: 'Priority', defaultWidth: 120 },
-  { key: 'date', label: 'Date', defaultWidth: 150 },
-  { key: 'start', label: 'Start', defaultWidth: 110 },
-  { key: 'end', label: 'End', defaultWidth: 110 },
-  { key: 'percent', label: '%', defaultWidth: 90 },
-  { key: 'collection', label: 'Collection', defaultWidth: 240 },
-  { key: 'xp', label: 'XP', defaultWidth: 80 },
-  { key: 'notes', label: 'Notes', defaultWidth: 280 },
-];
-
-const MIN_COL_WIDTH = 80;
-const INDENT = 24; // px per nesting level (must match getProjection)
-const NAME_BASE_PAD = 6; // px of breathing room between the left edge and the top-level controls
-const SPACER_WIDTH = 120; // trailing dead-space track so the last column's resize handle is reachable
-const BOTTOM_SPACER = 260; // px of dead space below the last row so the context menu has room to open
-
-// The Name column is pinned first and can never be hidden — every other field
-// can be reordered and toggled via the Fields menu.
-const NAME_COL_KEY: ColKey = 'title';
-
-// Collection pill palette — 8 picks that read well as tinted-bg + colored-text on
-// the dark table. The first is the default applied when a task becomes a collection.
-const COLLECTION_COLORS = [
-  '#9ca3af', // gray
-  '#f87171', // red
-  '#fb923c', // orange
-  '#fbbf24', // amber
-  '#4ade80', // green
-  '#2dd4bf', // teal
-  '#60a5fa', // blue
-  '#c084fc', // purple
-];
-const DEFAULT_COLLECTION_COLOR = COLLECTION_COLORS[0];
-
-// Human-readable names for the palette, shown in the collection Edit modal.
-const COLLECTION_COLOR_NAMES: Record<string, string> = {
-  '#9ca3af': 'Gray',
-  '#f87171': 'Red',
-  '#fb923c': 'Orange',
-  '#fbbf24': 'Amber',
-  '#4ade80': 'Green',
-  '#2dd4bf': 'Teal',
-  '#60a5fa': 'Blue',
-  '#c084fc': 'Purple',
-};
-const colorName = (c: string) => COLLECTION_COLOR_NAMES[c] || 'Custom';
-
-// Pill label color: lighten the collection color toward white so the name reads
-// with high contrast against the dark tinted-bg pill.
-const pillTextColor = (color: string) => `color-mix(in srgb, ${color} 60%, white)`;
-
-const WIDTHS_KEY = 'dun-hub-col-widths';
-const FIELD_ORDER_KEY = 'dun-hub-field-order'; // persisted column order (ColKey[], title first)
-const FIELD_HIDDEN_KEY = 'dun-hub-field-hidden'; // persisted hidden columns (ColKey[])
-const COLLAPSED_KEY = 'dun-hub-collapsed';
-const VIEW_KEY = 'dun-hub-view'; // which sidebar entry is selected ('all' | 'uncategorized' | collection id)
-const SIDEBAR_WIDTH_KEY = 'dun-hub-sidebar-width';
-const SIDEBAR_HIDDEN_KEY = 'dun-hub-sidebar-hidden';
-const SIDEBAR_COLLAPSED_KEY = 'dun-hub-sidebar-collapsed'; // expand/collapse state of the collection tree
-const SIDEBAR_INDENT = 14; // px per nesting level in the sidebar tree
-const MIN_SIDEBAR_WIDTH = 170;
-const MAX_SIDEBAR_WIDTH = 480;
-const DEFAULT_SIDEBAR_WIDTH = 224;
-
-type EditState = { id: string; col: ColKey; rect: DOMRect | null } | null;
-
-// A todo placed in the tree: its structural parent + depth + display order.
-interface FlatNode {
-  id: string;
-  parentId: string | null;
-  depth: number;
-  entry: OrganizerEntry;
-  hasChildren: boolean;
-}
-
-// Borderless input styling so the shared editors fill a spreadsheet cell.
-const cellEditCls =
-  'w-full h-full bg-[#1e1e1e] px-2.5 text-sm font-mono text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60';
-
-// ── Tree helpers ─────────────────────────────────────────────────────────────
-
-// Flatten the organizer todos into display order (depth-first by hubOrder),
-// hiding collapsed nodes' children and, during a drag, the active node's subtree.
-function flattenTree(
-  entries: OrganizerEntry[],
-  opts: { collapsed?: Set<string>; excludeId?: string } = {}
-): FlatNode[] {
-  const ids = new Set(entries.map((e) => e.todo.id));
-  const byParent = new Map<string | null, OrganizerEntry[]>();
-  for (const e of entries) {
-    const pid = e.todo.parentId && ids.has(e.todo.parentId) ? e.todo.parentId : null;
-    const arr = byParent.get(pid) ?? [];
-    arr.push(e);
-    byParent.set(pid, arr);
-  }
-  for (const list of byParent.values()) {
-    list.sort((a, b) => (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt));
-  }
-  const out: FlatNode[] = [];
-  const walk = (pid: string | null, depth: number) => {
-    for (const e of byParent.get(pid) ?? []) {
-      const id = e.todo.id;
-      const hasChildren = (byParent.get(id)?.length ?? 0) > 0;
-      out.push({ id, parentId: pid, depth, entry: e, hasChildren });
-      const skip = opts.collapsed?.has(id) || opts.excludeId === id;
-      if (!skip) walk(id, depth + 1);
-    }
-  };
-  walk(null, 0);
-  return out;
-}
-
-// Given the rendered list plus where the active item is being dropped and how far
-// it's been dragged horizontally, compute its projected depth + new parent.
-function getProjection(
-  items: FlatNode[],
-  activeId: string,
-  overId: string,
-  dragOffset: number,
-  indentWidth: number
-): { depth: number; parentId: string | null } | null {
-  const overItemIndex = items.findIndex((i) => i.id === overId);
-  const activeItemIndex = items.findIndex((i) => i.id === activeId);
-  if (overItemIndex === -1 || activeItemIndex === -1) return null;
-
-  const activeItem = items[activeItemIndex];
-  const newItems = arrayMove(items, activeItemIndex, overItemIndex);
-  const previousItem = newItems[overItemIndex - 1];
-  const nextItem = newItems[overItemIndex + 1];
-
-  const dragDepth = Math.round(dragOffset / indentWidth);
-  const projectedDepth = activeItem.depth + dragDepth;
-  const maxDepth = previousItem ? previousItem.depth + 1 : 0;
-  const minDepth = nextItem ? nextItem.depth : 0;
-  let depth = Math.max(minDepth, Math.min(projectedDepth, maxDepth));
-
-  const getParentId = (): string | null => {
-    if (depth === 0 || !previousItem) return null;
-    if (depth === previousItem.depth) return previousItem.parentId;
-    if (depth > previousItem.depth) return previousItem.id;
-    const candidate = newItems
-      .slice(0, overItemIndex)
-      .reverse()
-      .find((i) => i.depth === depth);
-    return candidate ? candidate.parentId : null;
-  };
-
-  let parentId = getParentId();
-
-  // A collection may only sit at the top level or nested under another
-  // collection — never under a task. Snap its computed parent up to the nearest
-  // collection ancestor and re-derive its depth from there.
-  if (activeItem.entry.todo.isCollection) {
-    const nodeById = new Map(items.map((i) => [i.id, i]));
-    const nearestColl = (id: string | null): string | null => {
-      let cur = id;
-      const seen = new Set<string>();
-      while (cur && nodeById.has(cur) && !seen.has(cur)) {
-        seen.add(cur);
-        const n = nodeById.get(cur)!;
-        if (n.entry.todo.isCollection) return cur;
-        cur = n.parentId;
-      }
-      return null;
-    };
-    parentId = nearestColl(parentId);
-    depth = parentId ? nodeById.get(parentId)!.depth + 1 : 0;
-  }
-
-  return { depth, parentId };
-}
-
-// Rebuild a contiguous parent-grouped order from a (possibly detached) flat list,
-// so subtasks always follow their parent after a drop.
-function orderFromFlat(
-  nodes: { id: string; parentId: string | null }[]
-): { id: string; parentId: string | null }[] {
-  const byParent = new Map<string | null, string[]>();
-  for (const n of nodes) {
-    const arr = byParent.get(n.parentId) ?? [];
-    arr.push(n.id);
-    byParent.set(n.parentId, arr);
-  }
-  const out: { id: string; parentId: string | null }[] = [];
-  const visited = new Set<string>();
-  const walk = (pid: string | null) => {
-    for (const id of byParent.get(pid) ?? []) {
-      if (visited.has(id)) continue;
-      visited.add(id);
-      out.push({ id, parentId: pid });
-      walk(id);
-    }
-  };
-  walk(null);
-  // Safety: any unreachable nodes (e.g. cycles) fall back to the root.
-  for (const n of nodes) if (!visited.has(n.id)) { visited.add(n.id); out.push({ id: n.id, parentId: null }); }
-  return out;
 }
 
 export const TodosHubView: React.FC<TodosHubViewProps> = ({
@@ -381,63 +176,114 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     localStorage.setItem(WIDTHS_KEY, JSON.stringify(widths));
   }, [widths]);
 
-  // ── Field order & visibility (persisted, edited via the Fields menu) ─────────
-  const colByKey = useMemo(() => new Map(COLUMNS.map((c) => [c.key, c])), []);
-  // Stored order is reconciled with COLUMNS so new fields appear (appended) and
-  // removed ones drop out; Name is always forced to the front.
-  const [fieldOrder, setFieldOrder] = useState<ColKey[]>(() => {
-    const fallback = COLUMNS.map((c) => c.key);
-    let saved: ColKey[] = [];
-    try {
-      const raw = JSON.parse(localStorage.getItem(FIELD_ORDER_KEY) || 'null');
-      if (Array.isArray(raw)) saved = raw.filter((k): k is ColKey => fallback.includes(k));
-    } catch { /* keep fallback */ }
-    const merged = saved.length ? [...saved, ...fallback.filter((k) => !saved.includes(k))] : fallback;
-    return [NAME_COL_KEY, ...merged.filter((k) => k !== NAME_COL_KEY)];
-  });
-  useEffect(() => { localStorage.setItem(FIELD_ORDER_KEY, JSON.stringify(fieldOrder)); }, [fieldOrder]);
+  // ── Sidebar selection (which collection / view the table shows) ────────────
+  // Declared early so the per-view config block below can derive its storage key.
+  const [selectedView, setSelectedView] = useState<string>(
+    () => localStorage.getItem(VIEW_KEY) || 'all'
+  );
+  useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
 
-  const [hiddenFields, setHiddenFields] = useState<Set<ColKey>>(() => {
-    try {
-      const raw: ColKey[] = JSON.parse(localStorage.getItem(FIELD_HIDDEN_KEY) || '[]');
-      return new Set(raw.filter((k) => k !== NAME_COL_KEY));
-    } catch { return new Set(); }
+  // ── Per-view config (field order, visibility, filters, sorts) ────────────────
+  // Keyed by workspaceId:viewId so each sidebar tab in each workspace has its own
+  // independent layout and filter/sort state.
+  const [viewsConfig, setViewsConfig] = useState<Record<string, any>>(() => {
+    try { return JSON.parse(localStorage.getItem(VIEWS_KEY) || '{}'); }
+    catch { return {}; }
   });
-  useEffect(() => { localStorage.setItem(FIELD_HIDDEN_KEY, JSON.stringify([...hiddenFields])); }, [hiddenFields]);
+  useEffect(() => {
+    localStorage.setItem(VIEWS_KEY, JSON.stringify(viewsConfig));
+  }, [viewsConfig]);
+
+  // The config key for the currently-visible view.
+  const viewConfigKey = `${activeWorkspaceId}:${selectedView}`;
+
+  // Derive and reconcile the current view's config (field order may drift if
+  // new columns are added; unknown keys are dropped, missing ones are appended).
+  const allColKeys = COLUMNS.map((c) => c.key);
+  const currentViewState = useMemo(() => {
+    const raw = viewsConfig[viewConfigKey] ?? {};
+    let fieldOrder: ColKey[] = Array.isArray(raw.fieldOrder)
+      ? raw.fieldOrder.filter((k: string): k is ColKey => allColKeys.includes(k as ColKey))
+      : [];
+    fieldOrder = [
+      NAME_COL_KEY,
+      ...[...fieldOrder, ...allColKeys.filter((k) => !fieldOrder.includes(k))].filter(
+        (k) => k !== NAME_COL_KEY
+      ),
+    ];
+    const hiddenFields = new Set<ColKey>(
+      (Array.isArray(raw.hiddenFields) ? raw.hiddenFields : []).filter(
+        (k: string): k is ColKey => k !== NAME_COL_KEY && allColKeys.includes(k as ColKey)
+      )
+    );
+    return {
+      fieldOrder,
+      hiddenFields,
+      filters: (Array.isArray(raw.filters) ? raw.filters : []) as FilterRule[],
+      sorts: (Array.isArray(raw.sorts) ? raw.sorts : []) as SortRule[],
+    };
+  }, [viewsConfig, viewConfigKey]);
+
+  const { fieldOrder, hiddenFields, filters: activeFilters, sorts: activeSorts } = currentViewState;
+
+  // Persist any view-state update (partial merge).
+  const updateViewState = (patch: {
+    fieldOrder?: ColKey[];
+    hiddenFields?: Set<ColKey>;
+    filters?: FilterRule[];
+    sorts?: SortRule[];
+  }) => {
+    setViewsConfig((prev) => ({
+      ...prev,
+      [viewConfigKey]: {
+        fieldOrder: patch.fieldOrder ?? fieldOrder,
+        hiddenFields: [...(patch.hiddenFields ?? hiddenFields)],
+        filters: patch.filters ?? activeFilters,
+        sorts: patch.sorts ?? activeSorts,
+      },
+    }));
+  };
+
+  const colByKey = useMemo(() => new Map(COLUMNS.map((c) => [c.key, c])), []);
 
   const toggleField = (key: ColKey) => {
-    if (key === NAME_COL_KEY) return; // Name can never be hidden
-    setHiddenFields((prev) => {
-      const n = new Set(prev);
-      if (n.has(key)) n.delete(key); else n.add(key);
-      return n;
-    });
+    if (key === NAME_COL_KEY) return;
+    const n = new Set(hiddenFields);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    updateViewState({ hiddenFields: n });
   };
-  // Reorder a field relative to another (Name stays pinned at the front).
   const moveField = (dragKey: ColKey, targetKey: ColKey, pos: 'before' | 'after') => {
     if (dragKey === NAME_COL_KEY || targetKey === NAME_COL_KEY) return;
-    setFieldOrder((prev) => {
-      const order = prev.filter((k) => k !== dragKey);
-      const ti = order.indexOf(targetKey);
-      if (ti === -1) return prev;
-      order.splice(pos === 'before' ? ti : ti + 1, 0, dragKey);
-      return [NAME_COL_KEY, ...order.filter((k) => k !== NAME_COL_KEY)];
-    });
+    const order = fieldOrder.filter((k) => k !== dragKey);
+    const ti = order.indexOf(targetKey);
+    if (ti === -1) return;
+    order.splice(pos === 'before' ? ti : ti + 1, 0, dragKey);
+    updateViewState({ fieldOrder: [NAME_COL_KEY, ...order.filter((k) => k !== NAME_COL_KEY)] });
   };
 
-  // Columns the table actually renders: ordered, with hidden ones removed (Name
-  // is always present and first). Drives the grid template, header, and rows.
+  // Columns the table renders: ordered, with hidden ones removed (Name always first).
   const visibleColumns = useMemo(
-    () => fieldOrder.map((k) => colByKey.get(k)!).filter((c) => c && (c.key === NAME_COL_KEY || !hiddenFields.has(c.key))),
+    () =>
+      fieldOrder
+        .map((k) => colByKey.get(k)!)
+        .filter((c): c is ColDef => !!c && (c.key === NAME_COL_KEY || !hiddenFields.has(c.key))),
     [fieldOrder, hiddenFields, colByKey]
   );
-  const lastColKey = visibleColumns[visibleColumns.length - 1].key; // gets a right divider before the spacer
+  const lastColKey = visibleColumns[visibleColumns.length - 1]?.key ?? NAME_COL_KEY;
 
-  // ── Fields menu (open + anchor) ──────────────────────────────────────────────
+  // ── Toolbar menu anchor states ────────────────────────────────────────────────
   const [fieldsMenu, setFieldsMenu] = useState<{ right: number; top: number } | null>(null);
+  const [filterMenu, setFilterMenu] = useState<{ right: number; top: number } | null>(null);
+  const [sortMenu, setSortMenu] = useState<{ right: number; top: number } | null>(null);
 
-  // Trailing spacer track gives the last column breathing room and a draggable resize handle.
-  const gridTemplateColumns = `${visibleColumns.map((c) => `${widths[c.key]}px`).join(' ')} ${SPACER_WIDTH}px`;
+  // Close all toolbar menus when the sidebar view changes.
+  useEffect(() => {
+    setFieldsMenu(null);
+    setFilterMenu(null);
+    setSortMenu(null);
+  }, [selectedView]);
+
+  const gridTemplateColumns = visibleColumns.map((c) => `${widths[c.key]}px`).join(' ');
 
   const startResize = (key: ColKey, e: React.MouseEvent) => {
     e.preventDefault();
@@ -515,11 +361,6 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const setCollectionColor = (entry: OrganizerEntry, color: string) =>
     onSaveTodo(entry.date, entry.date, { ...entry.todo, color });
 
-  // ── Sidebar selection (which collection / view the table shows) ────────────
-  const [selectedView, setSelectedView] = useState<string>(
-    () => localStorage.getItem(VIEW_KEY) || 'all'
-  );
-  useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
   const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null);
   const handleNewWorkspace = () => {
     const id = onAddWorkspace();
@@ -727,6 +568,44 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     return entries.filter((e) => isDescendantOf(e, selectedView));
   }, [entries, selectedView, byId]);
 
+  // Unique display values per field, computed from un-filtered view entries.
+  // Used to populate the filter value dropdown.
+  const uniqueValues = useMemo(() => {
+    const map = new Map<ColKey, string[]>();
+    for (const col of COLUMNS) {
+      const vals = new Set<string>();
+      for (const e of viewEntries) {
+        if (e.todo.isCollection) continue;
+        const v = getFieldDisplayValue(e, col.key, todoById);
+        if (v) vals.add(v);
+      }
+      map.set(col.key, [...vals].sort());
+    }
+    return map;
+  }, [viewEntries, todoById]);
+
+  // Apply active filters: collections are never filtered out (they're structural).
+  const filteredEntries = useMemo(() => {
+    if (!activeFilters.length) return viewEntries;
+    return viewEntries.filter(
+      (e) => e.todo.isCollection || activeFilters.every((f) => matchesFilter(e, f, todoById))
+    );
+  }, [viewEntries, activeFilters, todoById]);
+
+  // Build a sort comparator from the active sort rules.
+  const sortFn = useMemo(() => {
+    if (!activeSorts.length) return undefined;
+    return (a: OrganizerEntry, b: OrganizerEntry) => {
+      for (const s of activeSorts) {
+        const va = getFieldRawValue(a, s.field, todoById);
+        const vb = getFieldRawValue(b, s.field, todoById);
+        const cmp = compareRawValues(va, vb);
+        if (cmp !== 0) return s.direction === 'asc' ? cmp : -cmp;
+      }
+      return 0;
+    };
+  }, [activeSorts, todoById]);
+
   // Sidebar counts (tasks only, collections never counted).
   const allCount = entries.filter((e) => !e.todo.isCollection).length;
   const uncategorizedCount = entries.filter(
@@ -771,7 +650,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setEditing(null); setMenu(null); setColorPickerOpen(false); }
+      if (e.key === 'Escape') {
+        setEditing(null); setMenu(null); setColorPickerOpen(false);
+        setFieldsMenu(null); setFilterMenu(null); setSortMenu(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -782,11 +664,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const [overId, setOverId] = useState<string | null>(null);
   const [offsetLeft, setOffsetLeft] = useState(0);
 
-  // Rendered rows: collapsed children hidden, and the active subtree collapsed
-  // into its single row while dragging.
+  // Rendered rows: collapsed children hidden, active subtree collapsed while dragging.
+  // filteredEntries (not viewEntries) respects active filter rules; sortFn applies
+  // user-defined sort order within each sibling group.
   const flattened = useMemo(
-    () => flattenTree(viewEntries, { collapsed, excludeId: activeId ?? undefined }),
-    [viewEntries, collapsed, activeId]
+    () => flattenTree(filteredEntries, { collapsed, excludeId: activeId ?? undefined, sortFn }),
+    [filteredEntries, collapsed, activeId, sortFn]
   );
   const ids = flattened.map((f) => f.id);
 
@@ -813,7 +696,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     const proj =
       over ? getProjection(flattened, active.id as string, over.id as string, offsetLeft, INDENT) : null;
     if (over && proj) {
-      const cloned = flattenTree(viewEntries); // full order of the visible view, nothing hidden
+      const cloned = flattenTree(filteredEntries); // full order of the visible view, nothing hidden
       const overIndex = cloned.findIndex((i) => i.id === over.id);
       const activeIndex = cloned.findIndex((i) => i.id === active.id);
       if (activeIndex !== -1 && overIndex !== -1) {
@@ -856,7 +739,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     'relative flex items-center px-2.5 text-xs font-semibold tracking-wide text-white/75 select-none';
 
   const sidebarItemCls = (view: string, compact = false) =>
-    `w-full flex items-center rounded-md text-left transition-colors ${
+    `w-full flex items-center rounded-lg text-left transition-colors ${
       compact ? 'gap-1.5 px-2 py-1.5 text-[13px]' : 'gap-2 pl-2.5 pr-1.5 py-1.5 text-sm'
     } ${
       selectedView === view
@@ -893,7 +776,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                         if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
                       }}
                       placeholder="Workspace name"
-                      className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium bg-white/10 text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
+                      className="w-full rounded-lg px-2.5 py-1.5 text-sm font-medium bg-white/10 text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
                     />
                   );
                 }
@@ -903,7 +786,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     type="button"
                     onClick={() => onSelectWorkspace(ws.id)}
                     onDoubleClick={() => setRenamingWorkspaceId(ws.id)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left transition-colors ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-left transition-colors ${
                       active ? 'bg-white/10 text-white font-medium' : 'text-white/65 hover:bg-white/[0.05] hover:text-white'
                     }`}
                     title={ws.name || 'Untitled workspace'}
@@ -918,7 +801,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               type="button"
               onClick={handleNewWorkspace}
               title="New workspace"
-              className="shrink-0 mt-0.5 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="shrink-0 mt-0.5 w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
             >
               <Plus size={15} />
               <span>New workspace</span>
@@ -1016,7 +899,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           <button
             type="button"
             onClick={handleNewCollection}
-            className="shrink-0 m-2 flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="shrink-0 m-2 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-white/55 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             <FolderPlus size={15} />
             <span>New collection</span>
@@ -1060,7 +943,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <button
                 key={label}
                 type="button"
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[13px] font-medium transition-colors ${
                   active ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -1072,51 +955,89 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
           {/* Right-side actions */}
           <div className="flex items-center gap-1">
-            {([
-              { label: 'Sections', icon: Group },
-              { label: 'Fields', icon: Columns3 },
-              { label: 'Filter', icon: Filter },
-              { label: 'Sort', icon: ArrowUpDown },
-            ] as const).map(({ label, icon: Icon }) => {
-              const isFields = label === 'Fields';
-              const active = isFields && !!fieldsMenu;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={(e) => {
-                    if (!isFields) return;
-                    if (fieldsMenu) { setFieldsMenu(null); return; }
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setFieldsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
-                  }}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] transition-colors ${
-                    active ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <Icon size={14} />
-                  {label}
-                </button>
-              );
-            })}
+            {/* Sections — placeholder, not yet wired */}
+            <button type="button" className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] text-white/45 hover:text-white hover:bg-white/5 transition-colors">
+              <Group size={14} /> Sections
+            </button>
+
+            {/* Fields */}
+            <button
+              type="button"
+              onClick={(e) => {
+                if (fieldsMenu) { setFieldsMenu(null); return; }
+                setFilterMenu(null); setSortMenu(null);
+                const r = e.currentTarget.getBoundingClientRect();
+                setFieldsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
+                fieldsMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Columns3 size={14} /> Fields
+            </button>
+
+            {/* Filter */}
+            <button
+              type="button"
+              onClick={(e) => {
+                if (filterMenu) { setFilterMenu(null); return; }
+                setFieldsMenu(null); setSortMenu(null);
+                const r = e.currentTarget.getBoundingClientRect();
+                setFilterMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
+                filterMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Filter size={14} /> Filter
+              {activeFilters.length > 0 && (
+                <span className="ml-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-[var(--accent2)] text-[10px] font-bold text-white px-1">
+                  {activeFilters.length}
+                </span>
+              )}
+            </button>
+
+            {/* Sort */}
+            <button
+              type="button"
+              onClick={(e) => {
+                if (sortMenu) { setSortMenu(null); return; }
+                setFieldsMenu(null); setFilterMenu(null);
+                const r = e.currentTarget.getBoundingClientRect();
+                setSortMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
+                sortMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <ArrowUpDown size={14} /> Sort
+              {activeSorts.length > 0 && (
+                <span className="ml-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-[var(--accent2)] text-[10px] font-bold text-white px-1">
+                  {activeSorts.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
         {/* Task table — single scroll container, both axes. */}
         <div className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
-        <div className="w-max min-w-full text-white">
-          {/* Header row */}
+        
+        {/* Header row — full-bleed bar: its background + bottom border span the
+            whole width (no left/right gaps), but it carries the same TABLE_PAD
+            padding and w-max width as the rows below, so the padding sits outside
+            the grid tracks and the column borders line up with the body. */}
           <div
-            className="grid sticky top-0 z-30 bg-[#141414] border-b border-white/10 h-9"
-            style={{ gridTemplateColumns }}
+            className="grid sticky top-0 z-30 w-max min-w-full bg-[#0a0a0a] border-b border-white/10 h-9"
+            style={{ gridTemplateColumns, paddingLeft: TABLE_PAD, paddingRight: TABLE_PAD }}
           >
             {visibleColumns.map((c, idx) => (
               <div
                 key={c.key}
                 // The Name header gets the row's left padding so its label lines up with the row content.
-                style={idx === 0 ? { paddingLeft: 30 } : undefined}
+                style={idx === 0 ? { paddingLeft: 30} : undefined}
                 className={`${headerCellCls} ${idx > 0 ? 'border-l border-white/8' : ''} ${
-                  idx === 0 ? 'sticky left-0 z-10 bg-[#141414]' : ''
+                  idx === 0 ? 'sticky left-0 z-10 bg-[#0a0a0a] border-r border-white/8' : ''
                 } ${idx === visibleColumns.length - 1 ? 'border-r border-white/8' : ''}`}
               >
                 <span className="truncate">{c.label}</span>
@@ -1128,6 +1049,9 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               </div>
             ))}
           </div>
+
+        <div className="w-max min-w-full text-white" style={{ paddingLeft: TABLE_PAD, paddingRight: TABLE_PAD }}>
+          
 
           {/* Rows */}
           <DndContext
@@ -1199,6 +1123,31 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           onMove={moveField}
           onToggle={toggleField}
           onClose={() => setFieldsMenu(null)}
+        />,
+        document.body
+      )}
+
+      {/* Filter menu */}
+      {filterMenu && createPortal(
+        <FilterMenu
+          anchor={filterMenu}
+          filters={activeFilters}
+          allColumns={COLUMNS}
+          uniqueValues={uniqueValues}
+          onChange={(f) => updateViewState({ filters: f })}
+          onClose={() => setFilterMenu(null)}
+        />,
+        document.body
+      )}
+
+      {/* Sort menu */}
+      {sortMenu && createPortal(
+        <SortMenu
+          anchor={sortMenu}
+          sorts={activeSorts}
+          allColumns={COLUMNS}
+          onChange={(s) => updateViewState({ sorts: s })}
+          onClose={() => setSortMenu(null)}
         />,
         document.body
       )}
@@ -1275,7 +1224,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <>
                 <button
                   onClick={() => { setEditCollId(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <Pencil size={14} /> Edit
                 </button>
@@ -1285,19 +1234,19 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
                     closeMenu();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <CornerDownRight size={14} /> Create subtask
                 </button>
                 <button
                   onClick={() => { handleNewNestedCollection(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <FolderPlus size={14} /> Create nested collection
                 </button>
                 <button
                   onClick={() => setColorPickerOpen((v) => !v)}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <Palette size={14} /> Change color
                 </button>
@@ -1324,7 +1273,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <>
                 <button
                   onClick={() => { setFullViewId(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <Maximize2 size={14} /> Expand
                 </button>
@@ -1334,13 +1283,13 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
                     closeMenu();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <CornerDownRight size={14} /> Create subtask
                 </button>
                 <button
                   onClick={() => { if (menuEntry) makeCollection(menuEntry); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
                   <FolderPlus size={14} /> Create collection
                 </button>
@@ -1348,7 +1297,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             )}
             <button
               onClick={() => { onArchiveTodo(menu.id); closeMenu(); }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
             >
               <Archive size={14} /> Archive
             </button>
@@ -1366,7 +1315,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 }
                 closeMenu();
               }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-red-400 hover:bg-[#d93d42]/10 hover:text-red-300 transition-colors"
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-red-400 hover:bg-[#d93d42]/10 hover:text-red-300 transition-colors"
             >
               <Trash2 size={14} /> Delete
             </button>
@@ -1476,562 +1425,6 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           />
         )}
       </AnimatePresence>
-    </div>
-  );
-};
-
-// ── Collection Edit modal ────────────────────────────────────────────────────
-// Rename, recolor, and re-parent a collection. The parent picker reuses the
-// table column's CollectionSearchField (search + select), with the collection
-// itself and its descendants filtered out so it can't become its own ancestor.
-const CollectionEditModal: React.FC<{
-  entry: OrganizerEntry;
-  options: CollectionOption[];
-  todoById: Map<string, Todo>;
-  onCreateCollection: (name: string) => string;
-  onSave: (patch: { text: string; color: string; parentId: string | null }) => void;
-  onClose: () => void;
-}> = ({ entry, options, todoById, onCreateCollection, onSave, onClose }) => {
-  const [name, setName] = useState(entry.todo.text || '');
-  const [color, setColor] = useState(entry.todo.color || DEFAULT_COLLECTION_COLOR);
-  const [parentId, setParentId] = useState<string | null>(entry.todo.parentId ?? null);
-  const [colorOpen, setColorOpen] = useState(false);
-
-  // A collection can't be parented to itself or to one of its own descendants.
-  const parentOptions = options.filter(
-    (o) => o.id !== entry.todo.id && !o.path.some((p) => p.id === entry.todo.id)
-  );
-  const parentPath = collectionPath(parentId, todoById).map((c) => ({
-    id: c.id,
-    name: c.text || 'Untitled',
-    color: c.color,
-  }));
-
-  const labelCls = 'block text-sm font-semibold text-white mb-1.5';
-
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={onClose}
-    >
-      <div
-        onMouseDown={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] shadow-2xl"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
-          <h2 className="text-base font-bold text-white">Edit</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-white/40 hover:text-white transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {/* Name */}
-          <div>
-            <label className={labelCls}>Name</label>
-            <input
-              type="text"
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Collection name"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-sm focus:outline-none focus:border-[var(--accent2)] placeholder:text-white/25"
-            />
-          </div>
-
-          {/* Color */}
-          <div>
-            <label className={labelCls}>Color</label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setColorOpen((v) => !v)}
-                className="w-full flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-sm text-white"
-              >
-                <span className="shrink-0 w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color }} />
-                <span className="flex-1 text-left">{colorName(color)}</span>
-                <ChevronDown size={15} className="shrink-0 text-white/40" />
-              </button>
-              {colorOpen && (
-                <div className="absolute z-10 top-full left-0 mt-1 w-full rounded-lg border border-white/10 bg-[#222222] shadow-2xl p-1 max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
-                  {COLLECTION_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => { setColor(c); setColorOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left hover:bg-white/10 transition-colors"
-                    >
-                      <span className="shrink-0 w-3.5 h-3.5 rounded-full" style={{ backgroundColor: c }} />
-                      <span className="flex-1 text-sm text-white/90">{colorName(c)}</span>
-                      {c === color && <Check size={13} className="shrink-0 text-white/50" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Parent collection */}
-          <div>
-            <label className={labelCls}>Parent collection</label>
-            <CollectionSearchField
-              value={parentId}
-              currentPath={parentPath}
-              options={parentOptions}
-              onChange={setParentId}
-              onCreate={onCreateCollection}
-              placeholder={parentId ? 'Change parent…' : 'No parent — search to set one…'}
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-1.5 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave({ text: name.trim(), color, parentId })}
-            className="px-3.5 py-1.5 rounded-lg text-sm font-semibold bg-[var(--accent2)] text-white hover:opacity-90 transition-opacity"
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Fields menu ──────────────────────────────────────────────────────────────
-// Dropdown listing every column. Name is pinned first and locked; the rest can
-// be dragged to reorder (a drop line marks the target) and toggled hidden/shown.
-// Mirrors the sidebar's HTML5 drag-reorder, minus nesting (order only).
-const FieldsMenu: React.FC<{
-  anchor: { right: number; top: number };
-  order: ColKey[];
-  colByKey: Map<ColKey, ColDef>;
-  hidden: Set<ColKey>;
-  onMove: (dragKey: ColKey, targetKey: ColKey, pos: 'before' | 'after') => void;
-  onToggle: (key: ColKey) => void;
-  onClose: () => void;
-}> = ({ anchor, order, colByKey, hidden, onMove, onToggle, onClose }) => {
-  const [dragKey, setDragKey] = useState<ColKey | null>(null);
-  const [dropInfo, setDropInfo] = useState<{ key: ColKey; pos: 'before' | 'after' } | null>(null);
-
-  const onRowDragOver = (e: React.DragEvent, key: ColKey) => {
-    if (!dragKey || key === NAME_COL_KEY) { if (dropInfo) setDropInfo(null); return; }
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pos: 'before' | 'after' = (e.clientY - rect.top) / rect.height < 0.5 ? 'before' : 'after';
-    setDropInfo((prev) => (prev?.key === key && prev.pos === pos ? prev : { key, pos }));
-  };
-  const commitDrop = () => {
-    if (dragKey && dropInfo && dropInfo.key !== dragKey) onMove(dragKey, dropInfo.key, dropInfo.pos);
-    setDragKey(null);
-    setDropInfo(null);
-  };
-
-  return (
-    <>
-      {/* Backdrop — click outside closes the menu */}
-      <div className="fixed inset-0 z-[65]" onMouseDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
-      <div
-        style={{ position: 'fixed', right: anchor.right, top: anchor.top }}
-        className="z-[66] w-60 rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-1"
-      >
-        <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-white/30">
-          Fields
-        </div>
-        <div
-          className="space-y-0.5"
-          onDragOver={(e) => { if (dragKey) e.preventDefault(); }}
-          onDrop={(e) => { e.preventDefault(); commitDrop(); }}
-        >
-          {order.map((key) => {
-            const col = colByKey.get(key);
-            if (!col) return null;
-            const isName = key === NAME_COL_KEY;
-            const isHidden = hidden.has(key);
-            const drop = dropInfo?.key === key ? dropInfo.pos : null;
-            return (
-              <div
-                key={key}
-                className="relative"
-                draggable={!isName}
-                onDragStart={(e) => {
-                  if (isName) return;
-                  setDragKey(key);
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', key);
-                }}
-                onDragEnd={() => { setDragKey(null); setDropInfo(null); }}
-                onDragOver={(e) => onRowDragOver(e, key)}
-              >
-                {drop === 'before' && (
-                  <div className="pointer-events-none absolute -top-px left-2 right-2 z-10 h-0.5 rounded-full bg-[var(--accent2)]" />
-                )}
-                {drop === 'after' && (
-                  <div className="pointer-events-none absolute -bottom-px left-2 right-2 z-10 h-0.5 rounded-full bg-[var(--accent2)]" />
-                )}
-                <div
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-md ${
-                    dragKey === key ? 'opacity-40' : 'hover:bg-white/[0.06]'
-                  } ${isHidden ? 'text-white/40' : 'text-white/80'}`}
-                >
-                  {isName ? (
-                    <Lock size={13} className="shrink-0 text-white/25" />
-                  ) : (
-                    <GripVertical size={14} className="shrink-0 cursor-grab active:cursor-grabbing text-white/25 hover:text-white/60" />
-                  )}
-                  <span className="flex-1 truncate text-[13px]">{col.label}</span>
-                  {isName ? (
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-white/25">Locked</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onToggle(key)}
-                      title={isHidden ? 'Show field' : 'Hide field'}
-                      className="shrink-0 p-0.5 rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-                    >
-                      {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
-};
-
-// ── Row ──────────────────────────────────────────────────────────────────────
-interface HubRowProps {
-  node: FlatNode;
-  displayDepth: number;
-  gridTemplateColumns: string;
-  editing: EditState;
-  startEdit: (id: string, col: ColKey, e: React.MouseEvent) => void;
-  stopEdit: () => void;
-  onSaveTodo: (oldDate: string | null, newDate: string | null, updatedTodo: Todo) => void;
-  onToggleTodo: (id: string) => void;
-  openMenu: (id: string, x: number, y: number) => void;
-  isCollapsed: boolean;
-  onToggleCollapse: (id: string) => void;
-  collPath: { id: string; name: string; color?: string }[];
-  // Ordered, visible columns (Name first) — drives which cells render and in what order.
-  columns: ColDef[];
-  lastColKey: ColKey; // the rightmost visible column, which gets a right divider
-}
-
-const HubRow: React.FC<HubRowProps> = ({
-  node,
-  displayDepth,
-  gridTemplateColumns,
-  editing,
-  startEdit,
-  stopEdit,
-  onSaveTodo,
-  onToggleTodo,
-  openMenu,
-  isCollapsed,
-  onToggleCollapse,
-  collPath,
-  columns,
-  lastColKey,
-}) => {
-  const { entry, hasChildren } = node;
-  const { todo, date } = entry;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
-  const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    gridTemplateColumns,
-  };
-
-  const isEditing = (col: ColKey) => editing?.id === todo.id && editing?.col === col;
-  const saveField = (patch: Partial<Todo>) => onSaveTodo(date, date, { ...todo, ...patch });
-  const saveDate = (v: string) => onSaveTodo(date, v || null, todo);
-
-  // A clickable display cell that switches into edit mode.
-  const DisplayCell: React.FC<{ col: ColKey; children: React.ReactNode }> = ({ col, children }) => (
-    <div
-      onClick={(e) => startEdit(todo.id, col, e)}
-      className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden cursor-pointer hover:bg-white/[0.03] ${
-        col === lastColKey ? 'border-r border-white/8' : ''
-      }`}
-    >
-      {children}
-    </div>
-  );
-
-  const editCellWrap = 'flex items-stretch h-full border-l border-white/8';
-  // Empty fields render nothing — a placeholder dash just adds clutter.
-  const muted = null;
-
-  // ── Collection row ──────────────────────────────────────────────────────────
-  // A section header, not a task: full-width (no column cells / dividers), taller,
-  // no checkbox, with the name as a bottom-anchored colored pill.
-  if (todo.isCollection) {
-    const color = todo.color || DEFAULT_COLLECTION_COLOR;
-    return (
-      <div
-        ref={setNodeRef}
-        style={{ transform: CSS.Translate.toString(transform), transition }}
-        onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
-        className={`flex items-center w-full min-h-12 border-b pt-3 border-white/8 group/row ${
-          isDragging ? 'relative z-10 bg-[#262626] ring-1 ring-[var(--accent2)]/50 rounded-sm' : 'hover:bg-white/[0.015]'
-        }`}
-      >
-        {/* Header group, pinned to the left so it stays visible while scrolling.
-            Indents by nesting depth so sub-collections sit under their parent. */}
-        <div
-          style={{ paddingLeft: NAME_BASE_PAD + displayDepth * INDENT }}
-          className="sticky left-0 flex items-center gap-1 min-w-0 max-w-full"
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse(todo.id); }}
-              className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              title={isCollapsed ? 'Expand collection' : 'Collapse collection'}
-            >
-              {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-            </button>
-          ) : (
-            <span className="shrink-0 w-[20px]" />
-          )}
-
-          <button
-            {...attributes}
-            {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
-            title="Drag to reorder"
-          >
-            <GripVertical size={14} className="mr-1" />
-          </button>
-
-          {isEditing('title') ? (
-            <input
-              type="text"
-              autoFocus
-              defaultValue={todo.text}
-              onChange={(e) => saveField({ text: e.target.value })}
-              onBlur={stopEdit}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              placeholder="Collection name"
-              size={1}
-              style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="w-auto min-w-[60px] max-w-full [field-sizing:content] rounded-full px-2.5 py-0.5 text-sm font-medium focus:outline-none placeholder:text-white/40"
-            />
-          ) : (
-            <span
-              onClick={(e) => startEdit(todo.id, 'title', e)}
-              style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="min-w-0 max-w-full truncate rounded-full px-2.5 py-0.5 text-sm font-medium cursor-text"
-            >
-              {todo.text || 'Untitled collection'}
-            </span>
-          )}
-
-          <button
-            type="button"
-            title="Options"
-            onClick={(e) => {
-              e.stopPropagation();
-              const r = e.currentTarget.getBoundingClientRect();
-              openMenu(todo.id, r.left, r.bottom + 4);
-            }}
-            className="shrink-0 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
-          >
-            <MoreHorizontal size={15} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render a single non-Name cell by key. The cells are emitted in the order the
-  // Fields menu dictates (via the `columns` prop), so this switch maps key→JSX.
-  const renderCell = (col: ColKey) => {
-    switch (col) {
-      case 'status':
-        return (
-          <DisplayCell col="status">
-            {todo.status ? <OptionChip option={statusOption(todo.status)!} /> : muted}
-          </DisplayCell>
-        );
-      case 'priority':
-        return (
-          <DisplayCell col="priority">
-            {todo.priority ? <OptionChip option={priorityOption(todo.priority)!} /> : muted}
-          </DisplayCell>
-        );
-      case 'date':
-        return isEditing('date') ? (
-          <div className={editCellWrap}>
-            <DateField value={date || ''} autoFocus onBlur={stopEdit} onChange={saveDate} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="date">
-            <span className="truncate text-sm text-white/90">
-              {date ? format(parseISO(date), 'MMM d, yyyy') : muted}
-            </span>
-          </DisplayCell>
-        );
-      case 'start':
-        return isEditing('start') ? (
-          <div className={editCellWrap}>
-            <StartTimeField value={todo.startTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="start">
-            <span className="truncate text-sm text-white/90">{todo.startTime ? formatTime12h(todo.startTime) : muted}</span>
-          </DisplayCell>
-        );
-      case 'end':
-        return isEditing('end') ? (
-          <div className={editCellWrap}>
-            <EndTimeField value={todo.endTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="end">
-            <span className="truncate text-sm text-white/90">{todo.endTime ? formatTime12h(todo.endTime) : muted}</span>
-          </DisplayCell>
-        );
-      case 'percent':
-        return isEditing('percent') ? (
-          <div className={editCellWrap}>
-            <PercentField value={todo.percentageGoal} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="percent">
-            <span className="truncate text-sm text-white/90">
-              {todo.percentageGoal !== undefined ? `${todo.percentageGoal}%` : muted}
-            </span>
-          </DisplayCell>
-        );
-      case 'collection':
-        return (
-          <DisplayCell col="collection">
-            {collPath.length ? <CollectionBreadcrumb path={collPath} /> : muted}
-          </DisplayCell>
-        );
-      case 'xp':
-        return isEditing('xp') ? (
-          <div className={editCellWrap}>
-            <XpField value={todo.xp} autoFocus onBlur={stopEdit} onChange={(val) => saveField({ xp: val })} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="xp">
-            <span className="truncate text-sm text-white/90">{todo.xp !== undefined ? `${todo.xp}` : muted}</span>
-          </DisplayCell>
-        );
-      case 'notes':
-        return (
-          <DisplayCell col="notes">
-            {todo.notes ? <span className="truncate text-sm text-white/90">{todo.notes}</span> : muted}
-          </DisplayCell>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
-      className={`grid items-stretch min-h-[36px] border-b border-white/8 group/row ${
-        isDragging ? 'relative z-10 bg-[#262626] ring-1 ring-[var(--accent2)]/50 rounded-sm' : 'hover:bg-white/[0.015]'
-      }`}
-    >
-      {/* Name group: indent + collapse + handle + checkbox + name.
-          Frozen to the left edge; needs an opaque bg so scrolled cells don't show through. */}
-      <div
-        className={`sticky left-0 z-20 flex items-center h-full overflow-hidden border-r border-white/8 ${
-          isDragging ? 'bg-[#262626]' : 'bg-[#0a0a0a] group-hover/row:bg-[#0e0e0e]'
-        }`}
-      >
-        <div style={{ paddingLeft: NAME_BASE_PAD + displayDepth * INDENT }} className="flex items-center h-full min-w-0 flex-1">
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse(todo.id); }}
-              className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
-            >
-              {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-            </button>
-          ) : (
-            <span className="shrink-0 w-[19px]" />
-          )}
-
-          <button
-            {...attributes}
-            {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
-            title="Drag to reorder / nest"
-          >
-            <GripVertical size={14} className='mr-1' />
-          </button>
-
-          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} className='mr-1'/>
-
-          {isEditing('title') ? (
-            <input
-              type="text"
-              autoFocus
-              defaultValue={todo.text}
-              onChange={(e) => saveField({ text: e.target.value })}
-              onBlur={stopEdit}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              placeholder="Untitled"
-              className="flex-1 min-w-0 ml-1 h-full bg-[#1e1e1e] px-1.5 text-[15px] text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60"
-            />
-          ) : (
-            <>
-              <span
-                onClick={(e) => startEdit(todo.id, 'title', e)}
-                className={`flex-1 truncate ml-1 text-[15px] cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
-              >
-                {todo.text || <span className="text-white/40">Untitled</span>}
-              </span>
-              <button
-                type="button"
-                title="Options"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  openMenu(todo.id, r.left, r.bottom + 4);
-                }}
-                className="shrink-0 mr-1 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
-              >
-                <MoreHorizontal size={15} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Field cells — rendered in the order/visibility set by the Fields menu. */}
-      {columns
-        .filter((c) => c.key !== NAME_COL_KEY)
-        .map((c) => <React.Fragment key={c.key}>{renderCell(c.key)}</React.Fragment>)}
     </div>
   );
 };
