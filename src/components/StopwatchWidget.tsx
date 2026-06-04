@@ -56,7 +56,7 @@ export const StopwatchWidget: React.FC<StopwatchWidgetProps> = ({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.1 }}
-      className="fixed bottom-8 left-[calc(50%+40px)] -translate-x-1/2 z-60 w-[360px] max-w-[calc(100vw-2rem)] rounded-3xl overflow-hidden shadow-2xl shadow-black/40"
+      className="fixed bottom-8 left-[calc(50%+1.75rem)] -translate-x-1/2 z-60 w-[360px] max-w-[calc(100vw-2rem)] rounded-3xl overflow-hidden shadow-2xl shadow-black/40"
       style={{ backgroundImage: 'linear-gradient(135deg, #FF4E50 0%, #F9D423 100%)' }}
     >
       {/* Background image + dimming (mirrors fullscreen settings) */}

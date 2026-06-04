@@ -90,6 +90,9 @@ interface TodosHubViewProps {
   // Create a fresh top-level collection; returns its id for select + rename.
   onAddCollection: () => string;
   onDeleteTodo: (id: string) => void;
+  // Delete a collection: 'cascade' removes its whole subtree; 'promote' keeps
+  // the tasks/sub-collections and moves them up one level.
+  onDeleteCollection: (id: string, mode: 'cascade' | 'promote') => void;
   onArchiveTodo: (id: string) => void;
   // Persist hub order + nesting (position = hubOrder, parentId = nesting).
   onReorder: (items: { id: string; parentId: string | null }[]) => void;
@@ -154,6 +157,8 @@ const COLLAPSED_KEY = 'dun-hub-collapsed';
 const VIEW_KEY = 'dun-hub-view'; // which sidebar entry is selected ('all' | 'uncategorized' | collection id)
 const SIDEBAR_WIDTH_KEY = 'dun-hub-sidebar-width';
 const SIDEBAR_HIDDEN_KEY = 'dun-hub-sidebar-hidden';
+const SIDEBAR_COLLAPSED_KEY = 'dun-hub-sidebar-collapsed'; // expand/collapse state of the collection tree
+const SIDEBAR_INDENT = 14; // px per nesting level in the sidebar tree
 const MIN_SIDEBAR_WIDTH = 170;
 const MAX_SIDEBAR_WIDTH = 480;
 const DEFAULT_SIDEBAR_WIDTH = 224;
@@ -220,8 +225,6 @@ function getProjection(
   if (overItemIndex === -1 || activeItemIndex === -1) return null;
 
   const activeItem = items[activeItemIndex];
-  // Collections are always top-level — never let one get nested under another node.
-  if (activeItem.entry.todo.isCollection) return { depth: 0, parentId: null };
   const newItems = arrayMove(items, activeItemIndex, overItemIndex);
   const previousItem = newItems[overItemIndex - 1];
   const nextItem = newItems[overItemIndex + 1];
@@ -230,7 +233,7 @@ function getProjection(
   const projectedDepth = activeItem.depth + dragDepth;
   const maxDepth = previousItem ? previousItem.depth + 1 : 0;
   const minDepth = nextItem ? nextItem.depth : 0;
-  const depth = Math.max(minDepth, Math.min(projectedDepth, maxDepth));
+  let depth = Math.max(minDepth, Math.min(projectedDepth, maxDepth));
 
   const getParentId = (): string | null => {
     if (depth === 0 || !previousItem) return null;
@@ -243,7 +246,29 @@ function getProjection(
     return candidate ? candidate.parentId : null;
   };
 
-  return { depth, parentId: getParentId() };
+  let parentId = getParentId();
+
+  // A collection may only sit at the top level or nested under another
+  // collection — never under a task. Snap its computed parent up to the nearest
+  // collection ancestor and re-derive its depth from there.
+  if (activeItem.entry.todo.isCollection) {
+    const nodeById = new Map(items.map((i) => [i.id, i]));
+    const nearestColl = (id: string | null): string | null => {
+      let cur = id;
+      const seen = new Set<string>();
+      while (cur && nodeById.has(cur) && !seen.has(cur)) {
+        seen.add(cur);
+        const n = nodeById.get(cur)!;
+        if (n.entry.todo.isCollection) return cur;
+        cur = n.parentId;
+      }
+      return null;
+    };
+    parentId = nearestColl(parentId);
+    depth = parentId ? nodeById.get(parentId)!.depth + 1 : 0;
+  }
+
+  return { depth, parentId };
 }
 
 // Rebuild a contiguous parent-grouped order from a (possibly detached) flat list,
@@ -283,6 +308,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   onAddSubtask,
   onAddCollection,
   onDeleteTodo,
+  onDeleteCollection,
   onArchiveTodo,
   onReorder,
   onToggleTodo,
@@ -377,6 +403,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // ── Row context menu & full-view ───────────────────────────────────────────
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false); // "Change color" sub-panel
+  // Id of the collection pending a delete decision (cascade vs. promote).
+  const [deleteCollId, setDeleteCollId] = useState<string | null>(null);
   const [fullViewId, setFullViewId] = useState<string | null>(null);
   const openMenu = (id: string, x: number, y: number) => { setMenu({ id, x, y }); setColorPickerOpen(false); };
   const closeMenu = () => { setMenu(null); setColorPickerOpen(false); };
@@ -398,7 +426,6 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       startTime: undefined,
       endTime: undefined,
       xp: undefined,
-      tags: undefined,
       notes: undefined,
     });
   };
@@ -498,6 +525,54 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       setSelectedView('all');
     }
   }, [selectedCollectionId, collections]);
+
+  // ── Sidebar collection tree (nested, expand/collapse) ──────────────────────
+  const [collapsedColls, setCollapsedColls] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) || '[]'));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify([...collapsedColls]));
+  }, [collapsedColls]);
+  const toggleCollColl = (id: string) =>
+    setCollapsedColls((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+
+  // Collections grouped by their parent collection (root = null), each list in
+  // hub order. A parentId pointing outside this workspace's collections is
+  // treated as a root.
+  const collChildren = useMemo(() => {
+    const ids = new Set(collections.map((c) => c.todo.id));
+    const m = new Map<string | null, OrganizerEntry[]>();
+    for (const c of collections) {
+      const pid = c.todo.parentId && ids.has(c.todo.parentId) ? c.todo.parentId : null;
+      const arr = m.get(pid) ?? [];
+      arr.push(c);
+      m.set(pid, arr);
+    }
+    return m;
+  }, [collections]);
+
+  // Flatten the collection tree into render order (depth-first), hiding the
+  // children of collapsed collections.
+  const visibleCollections = useMemo(() => {
+    const out: { entry: OrganizerEntry; depth: number; hasChildren: boolean }[] = [];
+    const walk = (pid: string | null, depth: number) => {
+      for (const c of collChildren.get(pid) ?? []) {
+        const kids = collChildren.get(c.todo.id) ?? [];
+        out.push({ entry: c, depth, hasChildren: kids.length > 0 });
+        if (kids.length && !collapsedColls.has(c.todo.id)) walk(c.todo.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }, [collChildren, collapsedColls]);
 
   // The entries the table renders for the current view.
   //   • 'all'          → everything (collections show inline as pill headers)
@@ -716,10 +791,11 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               </button>
             </div>
 
-            {/* Scrollable list of collections */}
+            {/* Scrollable list of collections — nested tree, indented by depth */}
             <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
-              {collections.map((c) => {
+              {visibleCollections.map(({ entry: c, depth, hasChildren }) => {
                 const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
+                const indent = depth * SIDEBAR_INDENT;
                 if (renamingId === c.todo.id) {
                   return (
                     <input
@@ -733,8 +809,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                         if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
                       }}
                       placeholder="Collection name"
-                      style={{ backgroundColor: `${color}26`, color: pillTextColor(color) }}
-                      className="w-full rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
+                      style={{ marginLeft: indent, backgroundColor: `${color}26`, color: pillTextColor(color) }}
+                      className="rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
                     />
                   );
                 }
@@ -745,9 +821,22 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     onClick={() => setSelectedView(c.todo.id)}
                     onDoubleClick={() => setRenamingId(c.todo.id)}
                     onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
+                    style={{ paddingLeft: 6 + indent }}
                     className={sidebarItemCls(c.todo.id)}
                     title={c.todo.text || 'Untitled collection'}
                   >
+                    {hasChildren ? (
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); toggleCollColl(c.todo.id); }}
+                        className="shrink-0 -ml-1 flex items-center justify-center rounded text-white/45 hover:text-white hover:bg-white/10 transition-colors"
+                        title={collapsedColls.has(c.todo.id) ? 'Expand' : 'Collapse'}
+                      >
+                        {collapsedColls.has(c.todo.id) ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 -ml-1 w-[13px]" />
+                    )}
                     <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
                     <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
                     <span className="text-xs text-white/35">{collectionCount(c.todo.id)}</span>
@@ -1058,7 +1147,19 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <Archive size={14} /> Archive
             </button>
             <button
-              onClick={() => { onDeleteTodo(menu.id); closeMenu(); }}
+              onClick={() => {
+                // For a non-empty collection, ask whether to cascade or promote;
+                // empty collections (and plain tasks) just delete straight away.
+                if (
+                  menuEntry?.todo.isCollection &&
+                  entries.some((e) => (e.todo.parentId ?? null) === menu.id)
+                ) {
+                  setDeleteCollId(menu.id);
+                } else {
+                  onDeleteTodo(menu.id);
+                }
+                closeMenu();
+              }}
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-red-400 hover:bg-[#d93d42]/10 hover:text-red-300 transition-colors"
             >
               <Trash2 size={14} /> Delete
@@ -1067,6 +1168,70 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         </>,
         document.body
       )}
+
+      {/* Delete-collection modal: cascade vs. move tasks up one level */}
+      {deleteCollId && (() => {
+        const coll = entries.find((e) => e.todo.id === deleteCollId);
+        if (!coll) { setDeleteCollId(null); return null; }
+        const parentColl = coll.todo.parentId ? byId.get(coll.todo.parentId) : null;
+        const promoteTarget = parentColl?.todo.text || 'Uncategorized';
+        return createPortal(
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
+            onMouseDown={() => setDeleteCollId(null)}
+          >
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl"
+            >
+              <h2 className="text-base font-bold text-white">
+                Delete “{coll.todo.text || 'Untitled collection'}”
+              </h2>
+              <p className="mt-1.5 text-sm text-white/55">
+                This collection contains tasks. What should happen to them?
+              </p>
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => { onDeleteCollection(deleteCollId, 'promote'); setDeleteCollId(null); }}
+                  className="w-full flex items-start gap-3 rounded-xl border border-white/10 p-3 text-left hover:bg-white/5 transition-colors"
+                >
+                  <Inbox size={18} className="shrink-0 mt-0.5 text-[var(--accent2)]" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-white">Move tasks up one level</span>
+                    <span className="block text-xs text-white/50">
+                      Keep them — move into <span className="text-white/70 font-medium">{promoteTarget}</span> and delete only the collection.
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onDeleteCollection(deleteCollId, 'cascade'); setDeleteCollId(null); }}
+                  className="w-full flex items-start gap-3 rounded-xl border border-red-500/20 p-3 text-left hover:bg-[#d93d42]/10 transition-colors"
+                >
+                  <Trash2 size={18} className="shrink-0 mt-0.5 text-red-400" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-red-300">Delete all tasks</span>
+                    <span className="block text-xs text-white/50">
+                      Permanently remove the collection and everything nested inside it.
+                    </span>
+                  </span>
+                </button>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDeleteCollId(null)}
+                  className="px-3 py-1.5 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* Expanded full view */}
       <AnimatePresence>
@@ -1162,9 +1327,10 @@ const HubRow: React.FC<HubRowProps> = ({
           isDragging ? 'relative z-10 bg-[#262626] ring-1 ring-[var(--accent2)]/50 rounded-sm' : 'hover:bg-white/[0.015]'
         }`}
       >
-        {/* Header group, pinned to the left so it stays visible while scrolling. */}
+        {/* Header group, pinned to the left so it stays visible while scrolling.
+            Indents by nesting depth so sub-collections sit under their parent. */}
         <div
-          style={{ paddingLeft: NAME_BASE_PAD }}
+          style={{ paddingLeft: NAME_BASE_PAD + displayDepth * INDENT }}
           className="sticky left-0 flex items-end gap-1 pb-2 pr-4 min-w-0 max-w-full"
         >
           {hasChildren ? (

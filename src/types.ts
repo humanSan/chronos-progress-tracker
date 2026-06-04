@@ -41,7 +41,6 @@ export interface Todo {
   percentageGoal?: number; // e.g. 50
   startTime?: string; // HH:MM format for calendar start
   endTime?: string;   // HH:MM format for calendar end
-  tags?: string[];    // Category/project labels (e.g. ['work', 'errands'])
   notes?: string;     // Freeform notes text
   xp?: number;        // Points granted on completion (XP system TBD)
   createdAt: number;
@@ -62,7 +61,7 @@ export interface Todo {
   isCollection?: boolean;     // When true, this node is a Task Planner "collection"
                               // — a top-level section that groups child tasks. It
                               // renders as a colored pill header and ignores the
-                              // task fields (date/time/percent/xp/tags/notes).
+                              // task fields (date/time/percent/xp/notes).
   color?: string;             // Collection pill color (hex). Only meaningful when
                               // isCollection is true.
   workspaceId?: string;       // Task Planner workspace this todo/collection belongs

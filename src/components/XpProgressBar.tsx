@@ -21,8 +21,8 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats, weeklyXp })
     upForGrabs,
     yesterday,
     bestLast7Days,
+    avgLast7Days,
     bestAllTime,
-    totalAllTime,
     percent,
     remaining,
     reachedTarget,
@@ -62,7 +62,7 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats, weeklyXp })
   return (
     <>
       {/* ── Bottom-left: XP info ─────────────────────────────────────────── */}
-      <div className="fixed left-24 bottom-7 z-30 select-none pointer-events-none font-mono">
+      <div className="fixed left-18 bottom-7 z-30 select-none pointer-events-none font-mono">
         {/* The whole text block glows in the goal colour once a target is hit —
             a text-shadow on the text itself, no background and no box-shadow. */}
         <div
@@ -103,21 +103,13 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats, weeklyXp })
               <span className="text-white/60"> yesterday</span> */}
             </span>
 
-            {/* Records: best 7d ⬩ best all time ⬩ total all time */}
+            {/* Records: avg 7d ⬩ best 7d ⬩ best all time */}
             <span className="text-[12px] leading-tight">
               <span className='text-white/70'>
+              <span className=""> {avgLast7Days} </span> avg 7d ⬩
               <span className=""> {bestLast7Days} </span> best 7d ⬩
-              <span className=""> {bestAllTime} </span> best all-time ⬩
-              <span className=""> {totalAllTime} </span> total
+              <span className=""> {bestAllTime} </span> best all-time
               </span>
-              {/* <span className="text-white/85">{bestLast7Days}</span>
-              <span className="text-white/55"> best 7d</span>
-              <span className="text-white/30"> ⬩ </span>
-              <span className="text-white/85">{bestAllTime}</span>
-              <span className="text-white/55"> best all-time</span>
-              <span className="text-white/30"> ⬩ </span>
-              <span className="text-white/85">{totalAllTime}</span>
-              <span className="text-white/55"> total</span> */}
             </span>
           </div>
 
@@ -150,7 +142,9 @@ export const XpProgressBar: React.FC<XpProgressBarProps> = ({ stats, weeklyXp })
       </div>
 
       {/* ── Bottom: full-width progress bar ──────────────────────────────── */}
-      <div className="fixed bottom-0 left-20 right-0 z-30 pointer-events-none">
+      {/* Starts at the ribbon's right edge (w-14) so it spans the true content
+          width; the centered % label then sits on the content area's centre. */}
+      <div className="fixed bottom-0 left-14 right-0 z-30 pointer-events-none">
         <div className="relative flex justify-center mb-1">
           <span
             className="text-[12px] tracking-wide text-white/60 font-mono"

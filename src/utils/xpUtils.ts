@@ -14,6 +14,7 @@ export interface XpStats {
   target: number;             // first goal to beat — strictly yesterday's earned XP
   yesterday: number;          // XP earned the day before the given date (same as target)
   bestLast7Days: number;      // highest single-day earned XP over the 7 days before the date
+  avgLast7Days: number;       // average daily earned XP over the 7 days before the date
   bestAllTime: number;        // highest single-day earned XP over every prior day
   totalAllTime: number;       // sum of every day's earned XP, all time (incl. the date)
   percent: number;            // earned / target, clamped to 0..100 for the bar fill
@@ -62,11 +63,16 @@ export function computeXpStats(
   const yesterday = getEarnedXp(dayTodos, dayKey(subDays(parsed, 1)));
   const target = yesterday;
 
-  // Best single day over the 7 calendar days immediately before `date`.
+  // Best single day, and average daily earned, over the 7 calendar days
+  // immediately before `date`.
   let bestLast7Days = 0;
+  let sumLast7Days = 0;
   for (let i = 1; i <= 7; i++) {
-    bestLast7Days = Math.max(bestLast7Days, getEarnedXp(dayTodos, dayKey(subDays(parsed, i))));
+    const dayEarned = getEarnedXp(dayTodos, dayKey(subDays(parsed, i)));
+    bestLast7Days = Math.max(bestLast7Days, dayEarned);
+    sumLast7Days += dayEarned;
   }
+  const avgLast7Days = Math.round(sumLast7Days / 7);
 
   // Best single day, and lifetime total, across every recorded day. Bests
   // exclude the current date so they remain a target; the total includes it.
@@ -90,6 +96,7 @@ export function computeXpStats(
     target,
     yesterday,
     bestLast7Days,
+    avgLast7Days,
     bestAllTime,
     totalAllTime,
     percent,

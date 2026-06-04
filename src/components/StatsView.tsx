@@ -27,7 +27,7 @@ import {
   Download
 } from 'lucide-react';
 import { DayTodos, Todo } from '../types';
-import { hasDate } from '../utils/todoFilters';
+import { hasDate, todoIndex, collectionOf, collectionPath } from '../utils/todoFilters';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface StatsViewProps {
@@ -37,21 +37,9 @@ interface StatsViewProps {
 const GOLD = '#ffc24b';
 const VIOLET = '#a78bfa';
 
-// Category color mapper
-const getCategoryColor = (tag: string) => {
-  const normalized = tag.toLowerCase().trim();
-  if (normalized === 'work') return 'var(--accent1)';
-  if (normalized === 'personal') return 'var(--accent2)';
-  
-  // Custom hash for category tags
-  let hash = 0;
-  for (let i = 0; i < normalized.length; i++) {
-    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hues = [35, 140, 200, 260, 310, 340];
-  const hue = hues[Math.abs(hash) % hues.length];
-  return `hsl(${hue}, 80%, 65%)`;
-};
+// A collection along a task's path, as the stats surfaces consume it.
+interface CollChip { id: string; name: string; color: string }
+const UNCATEGORIZED: CollChip = { id: '__uncategorized__', name: 'Uncategorized', color: '#6b7280' };
 
 export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
   const [chartInterval, setChartInterval] = useState<'day' | 'fourDays' | 'week' | 'month'>(() => {
@@ -82,6 +70,16 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
       [dateStr]: !prev[dateStr]
     }));
   };
+
+  // Resolve a task's collection path (root → leaf). Stats group tasks by the
+  // collections they belong to, replacing the old free-text tags.
+  const byId = useMemo(() => todoIndex(dayTodos), [dayTodos]);
+  const collsForTodo = (t: Todo): CollChip[] =>
+    collectionPath(collectionOf(t, byId), byId).map((c) => ({
+      id: c.id,
+      name: c.text || 'Untitled',
+      color: c.color || '#9ca3af',
+    }));
 
   // 1. Build Pre-Aggregated Data Maps for Speed
   const { xpMap, completedMap, totalTasksMap, completedTodosMap, allTimeBestDay, totalXp } = useMemo(() => {
@@ -331,30 +329,35 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
     return list;
   }, [chartInterval, xpMap, completedMap]);
 
-  // 6. Category Calculations
+  // 6. Collection Calculations — each completed task's XP rolls up to every
+  // collection along its path (so ancestors accumulate their descendants' XP);
+  // tasks with no collection fall under "Uncategorized".
   const categoryData = useMemo(() => {
-    const cats: Record<string, number> = {};
+    const cats: Record<string, { name: string; color: string; xp: number }> = {};
     let totalCatXp = 0;
 
     dayTodos.forEach(d => {
       if (!hasDate(d.date)) return; // skip the undated Task Planner bucket
       (d.todos || []).forEach(t => {
         if (t && t.completed && t.xp) {
-          const tags = t.tags && t.tags.length > 0 ? t.tags : ['Untagged'];
-          tags.forEach(tag => {
-            cats[tag] = (cats[tag] || 0) + t.xp!;
+          const path = collsForTodo(t);
+          const buckets = path.length > 0 ? path : [UNCATEGORIZED];
+          buckets.forEach(c => {
+            const cur = cats[c.id] || { name: c.name, color: c.color, xp: 0 };
+            cur.xp += t.xp!;
+            cats[c.id] = cur;
             totalCatXp += t.xp!;
           });
         }
       });
     });
 
-    return Object.entries(cats)
-      .map(([name, xp]) => ({
+    return Object.values(cats)
+      .map(({ name, color, xp }) => ({
         name,
         xp,
         percentage: totalCatXp > 0 ? Math.round((xp / totalCatXp) * 100) : 0,
-        color: getCategoryColor(name)
+        color,
       }))
       .sort((a, b) => b.xp - a.xp);
   }, [dayTodos]);
@@ -368,7 +371,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
 
   // 8. Raw rows: every completed todo that has an XP value
   const rawRows = useMemo(() => {
-    const rows: { date: string; text: string; xp: number; tags: string[]; notes: string }[] = [];
+    const rows: { date: string; text: string; xp: number; colls: CollChip[]; notes: string }[] = [];
     dayTodos.forEach(d => {
       if (!hasDate(d.date)) return; // skip the undated Task Planner bucket
       (d.todos || []).forEach(t => {
@@ -377,7 +380,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
             date: d.date,
             text: t.text,
             xp: t.xp,
-            tags: t.tags || [],
+            colls: collsForTodo(t),
             notes: t.notes || ''
           });
         }
@@ -396,7 +399,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
 
-    const header = ['Date', 'Text', 'XP', 'Tags', 'Notes'];
+    const header = ['Date', 'Text', 'XP', 'Collection', 'Notes'];
     const lines = [
       header.join(','),
       ...rawRows.map(row =>
@@ -404,7 +407,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
           format(parseISO(row.date), 'yyyy-MM-dd'),
           escape(row.text),
           row.xp,
-          escape(row.tags.join('; ')),
+          escape(row.colls.map(c => c.name).join(' › ')),
           escape(row.notes)
         ].join(',')
       )
@@ -648,11 +651,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
 
       {/* Categories Distribution */}
       <div className="mb-8 flex flex-col">
-        <h3 className="text-white font-bold text-sm tracking-wide mb-4">Category Breakdown</h3>
+        <h3 className="text-white font-bold text-sm tracking-wide mb-4">Collection Breakdown</h3>
         {categoryData.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center opacity-30 py-12">
             <Tag size={32} className="mb-2" />
-            <p className="text-xs">No tags found on completed tasks</p>
+            <p className="text-xs">No completed tasks with XP yet</p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -736,7 +739,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
                     <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Date</th>
                     <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Text</th>
                     <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Points</th>
-                    <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Group</th>
+                    <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Collection</th>
                     <th className="py-3 px-4 text-xs font-bold uppercase tracking-wider text-white/40 whitespace-nowrap">Info</th>
                   </tr>
                 </thead>
@@ -753,11 +756,11 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
                         {row.xp}
                       </td>
                       <td className="py-2.5 px-4 whitespace-nowrap">
-                        {row.tags.length === 0 ? (
+                        {row.colls.length === 0 ? (
                           <span className="text-white/20 italic text-xs">—</span>
                         ) : (
-                          <span className="font-medium" style={{ color: getCategoryColor(row.tags[0]) }}>
-                            {row.tags.join(', ')}
+                          <span className="font-medium" style={{ color: row.colls[row.colls.length - 1].color }}>
+                            {row.colls.map(c => c.name).join(' › ')}
                           </span>
                         )}
                       </td>
@@ -807,14 +810,13 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
                   const totalCount = totalTasksMap.get(dateStr) || 0;
                   const isExpanded = !!expandedDates[dateStr];
                   
-                  // Gather unique categories for this day
-                  const tagsSet = new Set<string>();
+                  // Gather the unique collections touched by this day's tasks
+                  // (deduped by id across each task's full path).
+                  const dayCollMap = new Map<string, CollChip>();
                   dayTasks.forEach(t => {
-                    if (t.tags && t.tags.length > 0) {
-                      t.tags.forEach(tag => tagsSet.add(tag));
-                    }
+                    collsForTodo(t).forEach(c => dayCollMap.set(c.id, c));
                   });
-                  const dayTags = Array.from(tagsSet);
+                  const dayColls = Array.from(dayCollMap.values());
 
                   return (
                     <React.Fragment key={dateStr}>
@@ -833,22 +835,22 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex flex-wrap gap-1 max-w-xs">
-                            {dayTags.length === 0 ? (
+                            {dayColls.length === 0 ? (
                               <span className="text-[10px] text-white/20 italic">None</span>
                             ) : (
-                              dayTags.slice(0, 3).map(tag => (
-                                <span 
-                                  key={tag} 
+                              dayColls.slice(0, 3).map(c => (
+                                <span
+                                  key={c.id}
                                   className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 border text-white/60 transition-colors"
-                                  style={{ borderColor: `${getCategoryColor(tag)}30`, color: getCategoryColor(tag) }}
+                                  style={{ borderColor: `${c.color}30`, color: c.color }}
                                 >
-                                  {tag}
+                                  {c.name}
                                 </span>
                               ))
                             )}
-                            {dayTags.length > 3 && (
+                            {dayColls.length > 3 && (
                               <span className="text-[9px] font-bold text-white/30 px-1 py-0.5">
-                                +{dayTags.length - 3}
+                                +{dayColls.length - 3}
                               </span>
                             )}
                           </div>
@@ -889,18 +891,18 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
                                       <div className="flex items-center gap-2.5 min-w-0">
                                         <span className="text-emerald-400 shrink-0 text-xs">✔</span>
                                         <span className="text-sm text-white/80 font-medium truncate">{todo.text}</span>
-                                        {todo.tags && todo.tags.length > 0 && (
+                                        {collsForTodo(todo).length > 0 && (
                                           <div className="flex gap-1 shrink-0">
-                                            {todo.tags.map(tag => (
-                                              <span 
-                                                key={tag} 
+                                            {collsForTodo(todo).map(c => (
+                                              <span
+                                                key={c.id}
                                                 className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                                                style={{ 
-                                                  backgroundColor: `${getCategoryColor(tag)}15`,
-                                                  color: getCategoryColor(tag) 
+                                                style={{
+                                                  backgroundColor: `${c.color}15`,
+                                                  color: c.color
                                                 }}
                                               >
-                                                {tag}
+                                                {c.name}
                                               </span>
                                             ))}
                                           </div>
