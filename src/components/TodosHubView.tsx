@@ -591,6 +591,67 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     return out;
   }, [collChildren, collapsedColls]);
 
+  // ── Sidebar drag-and-drop (reorder + nest collections) ─────────────────────
+  // Drag a collection over another to nest it (hover the middle → highlight), or
+  // between two to reorder it (hover an edge → drop line). The drop line sits at
+  // the target's indent level, so re-parenting across nesting levels reads right.
+  const [dragCollId, setDragCollId] = useState<string | null>(null);
+  const [dropInfo, setDropInfo] = useState<{ id: string; pos: 'before' | 'inside' | 'after' } | null>(null);
+
+  // The dragged collection can't land on itself or inside its own subtree.
+  const inDraggedSubtree = (id: string) => {
+    if (!dragCollId) return false;
+    if (id === dragCollId) return true;
+    const e = byId.get(id);
+    return e ? isDescendantOf(e, dragCollId) : false;
+  };
+
+  const onCollDragOver = (e: React.DragEvent, targetId: string) => {
+    if (!dragCollId) return;
+    if (inDraggedSubtree(targetId)) { if (dropInfo) setDropInfo(null); return; } // not a valid target
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const r = (e.clientY - rect.top) / rect.height;
+    const pos: 'before' | 'inside' | 'after' = r < 0.3 ? 'before' : r > 0.7 ? 'after' : 'inside';
+    setDropInfo((prev) => (prev?.id === targetId && prev.pos === pos ? prev : { id: targetId, pos }));
+  };
+
+  // Re-parent / reorder the dragged collection relative to the drop target, then
+  // persist a fresh full ordering. Only the dragged node moves; its subtree (and
+  // every other node) keeps its parentId, so orderFromFlat re-nests everything.
+  const moveCollection = (draggedId: string, targetId: string, pos: 'before' | 'inside' | 'after') => {
+    const collIds = new Set(collections.map((c) => c.todo.id));
+    const effParent = (id: string): string | null => {
+      const p = byId.get(id)?.todo.parentId ?? null;
+      return p && collIds.has(p) ? p : null;
+    };
+    const newParent = pos === 'inside' ? targetId : effParent(targetId);
+
+    const nodes = flattenTree(entries)
+      .map((n) => ({ id: n.id, parentId: n.parentId }))
+      .filter((n) => n.id !== draggedId);
+    const ti = nodes.findIndex((n) => n.id === targetId);
+    if (ti === -1) return;
+    nodes.splice(pos === 'before' ? ti : ti + 1, 0, { id: draggedId, parentId: newParent });
+
+    onReorder(orderFromFlat(nodes));
+    if (pos === 'inside') {
+      setCollapsedColls((prev) => { const n = new Set(prev); n.delete(targetId); return n; });
+    }
+  };
+
+  // Commit using the live dropInfo (what the highlight/line shows), not the DOM
+  // element the drop happened to land on — the "after" line sits in the gap
+  // between rows, so the release often lands off the intended row.
+  const onCollDrop = () => {
+    if (dragCollId && dropInfo && !inDraggedSubtree(dropInfo.id)) {
+      moveCollection(dragCollId, dropInfo.id, dropInfo.pos);
+    }
+    setDragCollId(null);
+    setDropInfo(null);
+  };
+
   // The entries the table renders for the current view.
   //   • 'all'          → everything (collections show inline as pill headers)
   //   • 'uncategorized'→ tasks with no collection ancestor (collections excluded)
@@ -813,41 +874,69 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               </button>
             </div>
 
-            {/* Scrollable list of collections — nested tree, indented by depth */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+            {/* Scrollable list of collections — nested tree, indented by depth.
+                The drop is handled here (not per-row) so releases that land in
+                the gap between rows still commit the current drop target. */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full"
+              onDragOver={(e) => { if (dragCollId) e.preventDefault(); }}
+              onDrop={(e) => { e.preventDefault(); onCollDrop(); }}
+            >
               {visibleCollections.map(({ entry: c, depth, hasChildren }) => {
                 const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
                 const indent = depth * SIDEBAR_INDENT;
+                const drop = dropInfo?.id === c.todo.id ? dropInfo.pos : null;
                 return (
-                  <button
+                  <div
                     key={c.todo.id}
-                    type="button"
-                    onClick={() => setSelectedView(c.todo.id)}
-                    onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
-                    style={{ paddingLeft: 6 + indent }}
-                    className={sidebarItemCls(c.todo.id)}
-                    title={c.todo.text || 'Untitled collection'}
+                    className="relative"
+                    draggable
+                    onDragStart={(e) => {
+                      setDragCollId(c.todo.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', c.todo.id);
+                    }}
+                    onDragEnd={() => { setDragCollId(null); setDropInfo(null); }}
+                    onDragOver={(e) => onCollDragOver(e, c.todo.id)}
                   >
-                    <Shapes size={15} className="shrink-0" style={{ color }} />
-                    <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
-                    {/* Right slot: task count by default; on pane hover, collections
-                        with nested children swap it for an expand/collapse toggle. */}
-                    {hasChildren ? (
-                      <>
-                        <span className="text-xs text-white/35 group-hover/pane:hidden mr-1.5 font-mono">{collectionCount(c.todo.id)}</span>
-                        <span
-                          role="button"
-                          onClick={(e) => { e.stopPropagation(); toggleCollColl(c.todo.id); }}
-                          className="hidden shrink-0 -my-0.5 items-center justify-center rounded p-0.5 text-white/45 hover:text-white hover:bg-white/10 transition-colors group-hover/pane:flex"
-                          title={collapsedColls.has(c.todo.id) ? 'Expand' : 'Collapse'}
-                        >
-                          {collapsedColls.has(c.todo.id) ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-white/35 font-mono mr-1.5">{collectionCount(c.todo.id)}</span>
+                    {/* Reorder line — drawn at the target's indent level */}
+                    {drop === 'before' && (
+                      <div className="pointer-events-none absolute -top-px left-0 right-1.5 z-10 h-0.5 rounded-full bg-[var(--accent2)]" style={{ marginLeft: 6 + indent }} />
                     )}
-                  </button>
+                    {drop === 'after' && (
+                      <div className="pointer-events-none absolute -bottom-px left-0 right-1.5 z-10 h-0.5 rounded-full bg-[var(--accent2)]" style={{ marginLeft: 6 + indent }} />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedView(c.todo.id)}
+                      onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
+                      style={{ paddingLeft: 6 + indent }}
+                      className={`${sidebarItemCls(c.todo.id)} ${dragCollId === c.todo.id ? 'opacity-40' : ''} ${
+                        drop === 'inside' ? 'ring-2 ring-inset ring-[var(--accent2)] bg-[var(--accent2)]/10' : ''
+                      }`}
+                      title={c.todo.text || 'Untitled collection'}
+                    >
+                      <Shapes size={15} className="shrink-0" style={{ color }} />
+                      <span className="flex-1 truncate">{c.todo.text || 'Untitled collection'}</span>
+                      {/* Right slot: task count by default; on pane hover, collections
+                          with nested children swap it for an expand/collapse toggle. */}
+                      {hasChildren ? (
+                        <>
+                          <span className="text-xs text-white/35 group-hover/pane:hidden mr-1.5 font-mono">{collectionCount(c.todo.id)}</span>
+                          <span
+                            role="button"
+                            onClick={(e) => { e.stopPropagation(); toggleCollColl(c.todo.id); }}
+                            className="hidden shrink-0 -my-0.5 items-center justify-center rounded p-0.5 text-white/45 hover:text-white hover:bg-white/10 transition-colors group-hover/pane:flex"
+                            title={collapsedColls.has(c.todo.id) ? 'Expand' : 'Collapse'}
+                          >
+                            {collapsedColls.has(c.todo.id) ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-white/35 font-mono mr-1.5">{collectionCount(c.todo.id)}</span>
+                      )}
+                    </button>
+                  </div>
                 );
               })}
             </div>
