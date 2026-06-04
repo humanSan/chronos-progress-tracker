@@ -845,10 +845,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                         <span
                           role="button"
                           onClick={(e) => { e.stopPropagation(); toggleCollColl(c.todo.id); }}
-                          className="hidden shrink-0 items-center justify-center rounded text-white/45 hover:text-white hover:bg-white/10 transition-colors group-hover/pane:flex"
+                          className="hidden shrink-0 -my-0.5 items-center justify-center rounded p-0.5 text-white/45 hover:text-white hover:bg-white/10 transition-colors group-hover/pane:flex"
                           title={collapsedColls.has(c.todo.id) ? 'Expand' : 'Collapse'}
                         >
-                          {collapsedColls.has(c.todo.id) ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                          {collapsedColls.has(c.todo.id) ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
                         </span>
                       </>
                     ) : (
