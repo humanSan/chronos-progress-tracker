@@ -48,6 +48,8 @@ import {
   Box,
   Shapes,
   Pencil,
+  X,
+  Check,
 } from 'lucide-react';
 import { DayTodos, Todo, Workspace } from '../types';
 import {
@@ -150,6 +152,19 @@ const COLLECTION_COLORS = [
   '#c084fc', // purple
 ];
 const DEFAULT_COLLECTION_COLOR = COLLECTION_COLORS[0];
+
+// Human-readable names for the palette, shown in the collection Edit modal.
+const COLLECTION_COLOR_NAMES: Record<string, string> = {
+  '#9ca3af': 'Gray',
+  '#f87171': 'Red',
+  '#fb923c': 'Orange',
+  '#fbbf24': 'Amber',
+  '#4ade80': 'Green',
+  '#2dd4bf': 'Teal',
+  '#60a5fa': 'Blue',
+  '#c084fc': 'Purple',
+};
+const colorName = (c: string) => COLLECTION_COLOR_NAMES[c] || 'Custom';
 
 // Pill label color: lighten the collection color toward white so the name reads
 // with high contrast against the dark tinted-bg pill.
@@ -408,6 +423,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const [colorPickerOpen, setColorPickerOpen] = useState(false); // "Change color" sub-panel
   // Id of the collection pending a delete decision (cascade vs. promote).
   const [deleteCollId, setDeleteCollId] = useState<string | null>(null);
+  // Id of the collection whose Edit modal (name / color / parent) is open.
+  const [editCollId, setEditCollId] = useState<string | null>(null);
   const [fullViewId, setFullViewId] = useState<string | null>(null);
   const openMenu = (id: string, x: number, y: number) => { setMenu({ id, x, y }); setColorPickerOpen(false); };
   const closeMenu = () => { setMenu(null); setColorPickerOpen(false); };
@@ -434,15 +451,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   };
   const setCollectionColor = (entry: OrganizerEntry, color: string) =>
     onSaveTodo(entry.date, entry.date, { ...entry.todo, color });
-  const renameCollection = (entry: OrganizerEntry, text: string) =>
-    onSaveTodo(entry.date, entry.date, { ...entry.todo, text });
 
   // ── Sidebar selection (which collection / view the table shows) ────────────
   const [selectedView, setSelectedView] = useState<string>(
     () => localStorage.getItem(VIEW_KEY) || 'all'
   );
   useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(null);
   const handleNewWorkspace = () => {
     const id = onAddWorkspace();
@@ -612,14 +626,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const handleNewCollection = () => {
     const id = onAddCollection();
     setSelectedView(id);
-    setRenamingId(id);
   };
-  // Context-menu "Create nested collection": add a child under the target,
-  // ensure the parent is expanded so the new node is visible, then rename it.
+  // Context-menu "Create nested collection": add a child under the target and
+  // ensure the parent is expanded so the new node is visible.
   const handleNewNestedCollection = (parentId: string) => {
-    const id = onAddCollection(parentId);
+    onAddCollection(parentId);
     setCollapsedColls((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
-    setRenamingId(id);
   };
   // The table's "New" button adds into the selected collection, else top-level.
   const handleNewInView = selectedCollectionId
@@ -714,7 +726,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
   const sidebarItemCls = (view: string, compact = false) =>
     `w-full flex items-center rounded-md text-left transition-colors ${
-      compact ? 'gap-1.5 px-2 py-1.5 text-[13px]' : 'gap-2 px-2.5 py-1.5 text-sm'
+      compact ? 'gap-1.5 px-2 py-1.5 text-[13px]' : 'gap-2 pl-2.5 pr-1.5 py-1.5 text-sm'
     } ${
       selectedView === view
         ? 'bg-white/10 text-white font-medium'
@@ -792,12 +804,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <button type="button" onClick={() => setSelectedView('all')} className={sidebarItemCls('all')} title="All Tasks">
                 <Layers size={15} className="shrink-0 text-white/45" />
                 <span className="flex-1 truncate">All Tasks</span>
-                <span className="text-xs text-white/35">{allCount}</span>
+                <span className="text-xs text-white/35 font-mono mr-1.5">{allCount}</span>
               </button>
               <button type="button" onClick={() => setSelectedView('uncategorized')} className={sidebarItemCls('uncategorized')} title="Uncategorized">
                 <Inbox size={15} className="shrink-0 text-white/45" />
                 <span className="flex-1 truncate">Uncategorized</span>
-                <span className="text-xs text-white/35">{uncategorizedCount}</span>
+                <span className="text-xs text-white/35 font-mono mr-1.5">{uncategorizedCount}</span>
               </button>
             </div>
 
@@ -806,30 +818,11 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               {visibleCollections.map(({ entry: c, depth, hasChildren }) => {
                 const color = c.todo.color || DEFAULT_COLLECTION_COLOR;
                 const indent = depth * SIDEBAR_INDENT;
-                if (renamingId === c.todo.id) {
-                  return (
-                    <input
-                      key={c.todo.id}
-                      type="text"
-                      autoFocus
-                      defaultValue={c.todo.text}
-                      onChange={(e) => renameCollection(c, e.target.value)}
-                      onBlur={() => setRenamingId(null)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
-                      }}
-                      placeholder="Collection name"
-                      style={{ marginLeft: indent, backgroundColor: `${color}26`, color: pillTextColor(color) }}
-                      className="rounded-md px-2.5 py-1.5 text-sm font-medium focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60 placeholder:text-white/40"
-                    />
-                  );
-                }
                 return (
                   <button
                     key={c.todo.id}
                     type="button"
                     onClick={() => setSelectedView(c.todo.id)}
-                    onDoubleClick={() => setRenamingId(c.todo.id)}
                     onContextMenu={(e) => { e.preventDefault(); openMenu(c.todo.id, e.clientX, e.clientY); }}
                     style={{ paddingLeft: 6 + indent }}
                     className={sidebarItemCls(c.todo.id)}
@@ -841,18 +834,18 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                         with nested children swap it for an expand/collapse toggle. */}
                     {hasChildren ? (
                       <>
-                        <span className="text-xs text-white/35 group-hover/pane:hidden">{collectionCount(c.todo.id)}</span>
+                        <span className="text-xs text-white/35 group-hover/pane:hidden mr-1.5 font-mono">{collectionCount(c.todo.id)}</span>
                         <span
                           role="button"
                           onClick={(e) => { e.stopPropagation(); toggleCollColl(c.todo.id); }}
                           className="hidden shrink-0 -my-0.5 items-center justify-center rounded p-0.5 text-white/45 hover:text-white hover:bg-white/10 transition-colors group-hover/pane:flex"
                           title={collapsedColls.has(c.todo.id) ? 'Expand' : 'Collapse'}
                         >
-                          {collapsedColls.has(c.todo.id) ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                          {collapsedColls.has(c.todo.id) ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                         </span>
                       </>
                     ) : (
-                      <span className="text-xs text-white/35">{collectionCount(c.todo.id)}</span>
+                      <span className="text-xs text-white/35 font-mono mr-1.5">{collectionCount(c.todo.id)}</span>
                     )}
                   </button>
                 );
@@ -1094,10 +1087,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             {menuEntry?.todo.isCollection ? (
               <>
                 <button
-                  onClick={() => { setRenamingId(menu.id); closeMenu(); }}
+                  onClick={() => { setEditCollId(menu.id); closeMenu(); }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
-                  <Pencil size={14} /> Rename
+                  <Pencil size={14} /> Edit
                 </button>
                 <button
                   onClick={() => {
@@ -1195,6 +1188,26 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         document.body
       )}
 
+      {/* Edit-collection modal: rename, recolor, and re-parent */}
+      {editCollId && (() => {
+        const entry = entries.find((e) => e.todo.id === editCollId);
+        if (!entry) { setEditCollId(null); return null; }
+        return createPortal(
+          <CollectionEditModal
+            entry={entry}
+            options={collectionOptions}
+            todoById={todoById}
+            onCreateCollection={onCreateCollection}
+            onClose={() => setEditCollId(null)}
+            onSave={({ text, color, parentId }) => {
+              onSaveTodo(entry.date, entry.date, { ...entry.todo, text, color, parentId });
+              setEditCollId(null);
+            }}
+          />,
+          document.body
+        );
+      })()}
+
       {/* Delete-collection modal: cascade vs. move tasks up one level */}
       {deleteCollId && (() => {
         const coll = entries.find((e) => e.todo.id === deleteCollId);
@@ -1276,6 +1289,139 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+};
+
+// ── Collection Edit modal ────────────────────────────────────────────────────
+// Rename, recolor, and re-parent a collection. The parent picker reuses the
+// table column's CollectionSearchField (search + select), with the collection
+// itself and its descendants filtered out so it can't become its own ancestor.
+const CollectionEditModal: React.FC<{
+  entry: OrganizerEntry;
+  options: CollectionOption[];
+  todoById: Map<string, Todo>;
+  onCreateCollection: (name: string) => string;
+  onSave: (patch: { text: string; color: string; parentId: string | null }) => void;
+  onClose: () => void;
+}> = ({ entry, options, todoById, onCreateCollection, onSave, onClose }) => {
+  const [name, setName] = useState(entry.todo.text || '');
+  const [color, setColor] = useState(entry.todo.color || DEFAULT_COLLECTION_COLOR);
+  const [parentId, setParentId] = useState<string | null>(entry.todo.parentId ?? null);
+  const [colorOpen, setColorOpen] = useState(false);
+
+  // A collection can't be parented to itself or to one of its own descendants.
+  const parentOptions = options.filter(
+    (o) => o.id !== entry.todo.id && !o.path.some((p) => p.id === entry.todo.id)
+  );
+  const parentPath = collectionPath(parentId, todoById).map((c) => ({
+    id: c.id,
+    name: c.text || 'Untitled',
+    color: c.color,
+  }));
+
+  const labelCls = 'block text-sm font-semibold text-white mb-1.5';
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
+      onMouseDown={onClose}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] shadow-2xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
+          <h2 className="text-base font-bold text-white">Edit</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-white/40 hover:text-white transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {/* Name */}
+          <div>
+            <label className={labelCls}>Name</label>
+            <input
+              type="text"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Collection name"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-sm focus:outline-none focus:border-[var(--accent2)] placeholder:text-white/25"
+            />
+          </div>
+
+          {/* Color */}
+          <div>
+            <label className={labelCls}>Color</label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setColorOpen((v) => !v)}
+                className="w-full flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-sm text-white"
+              >
+                <span className="shrink-0 w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color }} />
+                <span className="flex-1 text-left">{colorName(color)}</span>
+                <ChevronDown size={15} className="shrink-0 text-white/40" />
+              </button>
+              {colorOpen && (
+                <div className="absolute z-10 top-full left-0 mt-1 w-full rounded-lg border border-white/10 bg-[#222222] shadow-2xl p-1 max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">
+                  {COLLECTION_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setColor(c); setColorOpen(false); }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left hover:bg-white/10 transition-colors"
+                    >
+                      <span className="shrink-0 w-3.5 h-3.5 rounded-full" style={{ backgroundColor: c }} />
+                      <span className="flex-1 text-sm text-white/90">{colorName(c)}</span>
+                      {c === color && <Check size={13} className="shrink-0 text-white/50" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Parent collection */}
+          <div>
+            <label className={labelCls}>Parent collection</label>
+            <CollectionSearchField
+              value={parentId}
+              currentPath={parentPath}
+              options={parentOptions}
+              onChange={setParentId}
+              onCreate={onCreateCollection}
+              placeholder={parentId ? 'Change parent…' : 'No parent — search to set one…'}
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave({ text: name.trim(), color, parentId })}
+            className="px-3.5 py-1.5 rounded-lg text-sm font-semibold bg-[var(--accent2)] text-white hover:opacity-90 transition-opacity"
+          >
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
