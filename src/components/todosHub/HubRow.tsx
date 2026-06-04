@@ -120,7 +120,7 @@ export const HubRow: React.FC<HubRowProps> = ({
               {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
             </button>
           ) : (
-            <span className="shrink-0 w-[20px]" />
+            <span className="shrink-0 w-5" />
           )}
 
           {!hideDragHandle && (
@@ -289,10 +289,10 @@ export const HubRow: React.FC<HubRowProps> = ({
               className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
               title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
             >
-              {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+              {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
             </button>
           ) : (
-            <span className="shrink-0 w-[19px]" />
+            <span className="shrink-0 w-5" />
           )}
 
           {!hideDragHandle && (
@@ -302,11 +302,11 @@ export const HubRow: React.FC<HubRowProps> = ({
               className="shrink-0 cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 opacity-0 group-hover/row:opacity-100 transition-opacity"
               title="Drag to reorder / nest"
             >
-              <GripVertical size={14} className='mr-1' />
+              <GripVertical size={14} />
             </button>
           )}
 
-          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} className='mr-1'/>
+          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} className='mr-2 ml-1'/>
 
           {isEditing('title') ? (
             <input
@@ -317,13 +317,13 @@ export const HubRow: React.FC<HubRowProps> = ({
               onBlur={stopEdit}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               placeholder="Untitled"
-              className="flex-1 min-w-0 ml-1 h-full bg-[#1e1e1e] px-1.5 text-sm text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60"
+              className="flex-1 min-w-0 h-full bg-[#1e1e1e] px-1.5 text-sm text-white focus:outline-none ring-1 ring-inset ring-[var(--accent2)]/60"
             />
           ) : (
             <>
               <span
                 onClick={(e) => startEdit(todo.id, 'title', e)}
-                className={`flex-1 truncate ml-1 text-sm cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
+                className={`flex-1 truncate text-sm cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
               >
                 {todo.text || <span className="text-white/40">Untitled</span>}
               </span>

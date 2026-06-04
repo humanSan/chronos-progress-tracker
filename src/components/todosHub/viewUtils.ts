@@ -91,30 +91,16 @@ const FIELD_GROUP_ORDER: Partial<Record<ColKey, string[]>> = {
   priority: ['High', 'Medium', 'Low'],
 };
 
-const NONE_LABEL = '(None)';
-const NONE_COLOR = '#9ca3af';
-
 export function getGroupColor(field: ColKey, label: string): string {
-  return FIELD_GROUP_COLORS[field]?.[label] ?? NONE_COLOR;
+  return FIELD_GROUP_COLORS[field]?.[label] ?? '#9ca3af';
 }
 
-const sortTasks = (tasks: OrganizerEntry[], sortFn?: (a: OrganizerEntry, b: OrganizerEntry) => number) => {
-  const out = [...tasks];
-  if (sortFn) out.sort(sortFn);
-  else out.sort((a, b) => (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt));
-  return out;
-};
-
-const toTaskRows = (tasks: OrganizerEntry[]): GroupRow[] =>
-  tasks.map((t) => ({
-    type: 'task' as const,
-    node: { id: t.todo.id, parentId: null, depth: 0, entry: t, hasChildren: false } satisfies FlatNode,
-  }));
-
 // Build the flat list of rows for the grouped rendering mode.
-// Tasks with no value for the group field are not placed in a "(None)" section —
-// instead they float to the top or bottom per `showLeafTasks`. Collections are
-// always skipped since they're structural, not data rows.
+// Parent/child task relationships are preserved within each group section:
+// a child appears nested under its parent if the child's group value matches
+// the parent's (or if the child has no value and inherits the parent's group).
+// A child with a distinct non-empty value breaks out into its own section.
+// Tasks with no value and no task ancestor with a value float ungrouped.
 export function buildGroupedItems(
   entries: OrganizerEntry[],
   groupField: ColKey,
@@ -124,22 +110,94 @@ export function buildGroupedItems(
   showLeafTasks: 'top' | 'bottom' | 'none' = 'bottom'
 ): GroupRow[] {
   const tasks = entries.filter((e) => !e.todo.isCollection);
+  const taskById = new Map<string, OrganizerEntry>(tasks.map((e) => [e.todo.id, e]));
 
-  // Separate tasks that have a value from those that don't.
+  // Returns the direct task parent id (null when parent is a collection or absent).
+  const getParentTaskId = (e: OrganizerEntry): string | null => {
+    const pid = e.todo.parentId ?? null;
+    return pid && taskById.has(pid) ? pid : null;
+  };
+
+  // Returns the group section a task belongs to:
+  // - own non-empty field value, or
+  // - nearest task ancestor's field value (inherited), or
+  // - '' for ungrouped.
+  const owningGroupCache = new Map<string, string>();
+  const getOwningGroup = (taskId: string): string => {
+    if (owningGroupCache.has(taskId)) return owningGroupCache.get(taskId)!;
+    const seen = new Set<string>();
+    let cur: string | null = taskId;
+    const chain: string[] = [];
+    while (cur && !seen.has(cur)) {
+      if (owningGroupCache.has(cur)) {
+        const result = owningGroupCache.get(cur)!;
+        for (const id of chain) owningGroupCache.set(id, result);
+        return result;
+      }
+      seen.add(cur);
+      const entry = taskById.get(cur);
+      if (!entry) break;
+      const val = getFieldDisplayValue(entry, groupField, todoById);
+      if (val) {
+        for (const id of chain) owningGroupCache.set(id, val);
+        owningGroupCache.set(cur, val);
+        return val;
+      }
+      chain.push(cur);
+      cur = getParentTaskId(entry);
+    }
+    for (const id of chain) owningGroupCache.set(id, '');
+    return '';
+  };
+
+  // Precompute in-group children: a child stays under its task parent only when
+  // both share the same owning group.
+  const childrenInGroup = new Map<string, OrganizerEntry[]>();
+  for (const task of tasks) {
+    const parentId = getParentTaskId(task);
+    if (!parentId) continue;
+    if (getOwningGroup(task.todo.id) !== getOwningGroup(parentId)) continue;
+    const arr = childrenInGroup.get(parentId) ?? [];
+    arr.push(task);
+    childrenInGroup.set(parentId, arr);
+  }
+
+  const doSort = (list: OrganizerEntry[]): OrganizerEntry[] => {
+    const out = [...list];
+    if (sortFn) out.sort(sortFn);
+    else out.sort((a, b) => (a.todo.hubOrder ?? a.todo.createdAt) - (b.todo.hubOrder ?? b.todo.createdAt));
+    return out;
+  };
+
+  // Recursively emit a task and its in-group children (respecting collapse).
+  const buildTaskRows = (taskId: string, depth: number): GroupRow[] => {
+    const entry = taskById.get(taskId);
+    if (!entry) return [];
+    const children = doSort(childrenInGroup.get(taskId) ?? []);
+    const hasChildren = children.length > 0;
+    const node: FlatNode = { id: taskId, parentId: null, depth, entry, hasChildren };
+    const rows: GroupRow[] = [{ type: 'task', node }];
+    if (hasChildren && !collapsed.has(taskId)) {
+      for (const child of children) rows.push(...buildTaskRows(child.todo.id, depth + 1));
+    }
+    return rows;
+  };
+
+  // Collect root tasks per group (tasks with no task parent sharing the same group).
   const ungrouped: OrganizerEntry[] = [];
   const groups = new Map<string, OrganizerEntry[]>();
   for (const task of tasks) {
-    const key = getFieldDisplayValue(task, groupField, todoById);
-    if (!key) {
-      ungrouped.push(task);
-    } else {
-      const arr = groups.get(key) ?? [];
-      arr.push(task);
-      groups.set(key, arr);
-    }
+    const parentId = getParentTaskId(task);
+    const myGroup = getOwningGroup(task.todo.id);
+    // Skip if this task nests under a task parent in the same group.
+    if (parentId && getOwningGroup(parentId) === myGroup) continue;
+    if (!myGroup) { ungrouped.push(task); continue; }
+    const arr = groups.get(myGroup) ?? [];
+    arr.push(task);
+    groups.set(myGroup, arr);
   }
 
-  // Sort group keys: defined order first, then alpha.
+  // Sort group keys: canonical order first, then alpha.
   const order = FIELD_GROUP_ORDER[groupField] ?? [];
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     const ia = order.indexOf(a), ib = order.indexOf(b);
@@ -151,17 +209,20 @@ export function buildGroupedItems(
 
   const groupRows: GroupRow[] = [];
   for (const key of sortedKeys) {
-    const groupTasks = groups.get(key)!;
-    const id = `__grp:${groupField}:${key}`;
-    const isCollapsed = collapsed.has(id);
-    groupRows.push({ type: 'header', id, label: key, color: getGroupColor(groupField, key), count: groupTasks.length, isCollapsed });
+    const rootTasks = doSort(groups.get(key)!);
+    const totalCount = tasks.filter((t) => getOwningGroup(t.todo.id) === key).length;
+    const headerId = `__grp:${groupField}:${key}`;
+    const isCollapsed = collapsed.has(headerId);
+    groupRows.push({ type: 'header', id: headerId, label: key, color: getGroupColor(groupField, key), count: totalCount, isCollapsed });
     if (!isCollapsed) {
-      groupRows.push(...toTaskRows(sortTasks(groupTasks, sortFn)));
+      for (const root of rootTasks) groupRows.push(...buildTaskRows(root.todo.id, 1));
     }
   }
 
-  // Place ungrouped tasks before or after all sections (never in their own section).
-  const ungroupedRows = toTaskRows(sortTasks(ungrouped, sortFn));
+  // Ungrouped tasks also preserve hierarchy among themselves.
+  const ungroupedRows: GroupRow[] = [];
+  for (const task of doSort(ungrouped)) ungroupedRows.push(...buildTaskRows(task.todo.id, 0));
+
   return showLeafTasks === 'top'
     ? [...ungroupedRows, ...groupRows]
     : [...groupRows, ...ungroupedRows];

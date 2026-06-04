@@ -679,7 +679,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
   const handleNewCollection = () => {
     const id = onAddCollection();
-    setSelectedView(id);
+    // setSelectedView(id);
+    setEditCollId(id);
   };
   // Context-menu "Create nested collection": add a child under the target and
   // ensure the parent is expanded so the new node is visible.
@@ -896,6 +897,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 <span className="text-xs text-white/35 font-mono mr-1.5">{uncategorizedCount}</span>
               </button>
             </div>
+
+            
 
             {/* Scrollable list of collections — nested tree, indented by depth.
                 The drop is handled here (not per-row) so releases that land in
@@ -1185,7 +1188,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     <HubRow
                       key={row.node.id}
                       node={row.node}
-                      displayDepth={0}
+                      displayDepth={row.node.depth}
                       gridTemplateColumns={gridTemplateColumns}
                       editing={editing}
                       startEdit={startEdit}
@@ -1193,7 +1196,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                       onSaveTodo={onSaveTodo}
                       onToggleTodo={handleToggleTodo}
                       openMenu={openMenu}
-                      isCollapsed={false}
+                      isCollapsed={collapsed.has(row.node.id)}
                       onToggleCollapse={toggleCollapse}
                       collPath={collPathFor(row.node.entry.todo)}
                       columns={visibleColumns}
@@ -1210,7 +1213,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           <button
             type="button"
             onClick={handleNewInView}
-            className="flex items-center gap-2 w-full h-9 px-3 text-sm text-white/60 hover:text-white hover:bg-white/[0.03] border-b border-white/8 cursor-pointer transition-colors"
+            className="flex items-center gap-2 w-full h-9 px-3 text-sm text-white/60 hover:text-white hover:bg-white/3 border-b border-white/8 cursor-pointer transition-colors"
           >
             <Plus size={14} />
             <span>New</span>
@@ -1367,7 +1370,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
-                  <CornerDownRight size={14} /> Create subtask
+                  <CornerDownRight size={14} /> Create task inside
                 </button>
                 <button
                   onClick={() => { handleNewNestedCollection(menu.id); closeMenu(); }}
@@ -1416,7 +1419,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
-                  <CornerDownRight size={14} /> Create subtask
+                  <CornerDownRight size={14} /> Create task inside
                 </button>
                 <button
                   onClick={() => { if (menuEntry) makeCollection(menuEntry); closeMenu(); }}

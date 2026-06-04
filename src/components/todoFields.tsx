@@ -225,7 +225,7 @@ export const STATUS_OPTIONS: ChipOption[] = [
 ];
 
 export const PRIORITY_OPTIONS: ChipOption[] = [
-  { value: 'low',    label: 'Low',    color: '#64748b' }, // slate
+  { value: 'low',    label: 'Low',    color: '#6b7280' }, // slate
   { value: 'medium', label: 'Medium', color: '#f59e0b' }, // amber
   { value: 'high',   label: 'High',   color: '#ef4444' }, // red
 ];
@@ -269,7 +269,7 @@ export const OptionSelectField: React.FC<{
               style={{ backgroundColor: chipBg(opt.color), color: chipText(opt.color) }}
               className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                 selected
-                  ? 'ring-2 ring-white/70 ring-offset-1 ring-offset-[#1A1A1A]'
+                  ? `ring-2 ring-[${opt.color}] ring-offset`
                   : 'opacity-45 hover:opacity-100'
               }`}
             >
