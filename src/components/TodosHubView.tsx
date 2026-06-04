@@ -50,6 +50,9 @@ import {
   Pencil,
   X,
   Check,
+  Eye,
+  EyeOff,
+  Lock,
 } from 'lucide-react';
 import { DayTodos, Todo, Workspace } from '../types';
 import {
@@ -137,7 +140,10 @@ const INDENT = 24; // px per nesting level (must match getProjection)
 const NAME_BASE_PAD = 6; // px of breathing room between the left edge and the top-level controls
 const SPACER_WIDTH = 120; // trailing dead-space track so the last column's resize handle is reachable
 const BOTTOM_SPACER = 260; // px of dead space below the last row so the context menu has room to open
-const LAST_COL_KEY = COLUMNS[COLUMNS.length - 1].key; // gets a right divider to mark where the spacer begins
+
+// The Name column is pinned first and can never be hidden — every other field
+// can be reordered and toggled via the Fields menu.
+const NAME_COL_KEY: ColKey = 'title';
 
 // Collection pill palette — 8 picks that read well as tinted-bg + colored-text on
 // the dark table. The first is the default applied when a task becomes a collection.
@@ -171,6 +177,8 @@ const colorName = (c: string) => COLLECTION_COLOR_NAMES[c] || 'Custom';
 const pillTextColor = (color: string) => `color-mix(in srgb, ${color} 60%, white)`;
 
 const WIDTHS_KEY = 'dun-hub-col-widths';
+const FIELD_ORDER_KEY = 'dun-hub-field-order'; // persisted column order (ColKey[], title first)
+const FIELD_HIDDEN_KEY = 'dun-hub-field-hidden'; // persisted hidden columns (ColKey[])
 const COLLAPSED_KEY = 'dun-hub-collapsed';
 const VIEW_KEY = 'dun-hub-view'; // which sidebar entry is selected ('all' | 'uncategorized' | collection id)
 const SIDEBAR_WIDTH_KEY = 'dun-hub-sidebar-width';
@@ -373,8 +381,63 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     localStorage.setItem(WIDTHS_KEY, JSON.stringify(widths));
   }, [widths]);
 
+  // ── Field order & visibility (persisted, edited via the Fields menu) ─────────
+  const colByKey = useMemo(() => new Map(COLUMNS.map((c) => [c.key, c])), []);
+  // Stored order is reconciled with COLUMNS so new fields appear (appended) and
+  // removed ones drop out; Name is always forced to the front.
+  const [fieldOrder, setFieldOrder] = useState<ColKey[]>(() => {
+    const fallback = COLUMNS.map((c) => c.key);
+    let saved: ColKey[] = [];
+    try {
+      const raw = JSON.parse(localStorage.getItem(FIELD_ORDER_KEY) || 'null');
+      if (Array.isArray(raw)) saved = raw.filter((k): k is ColKey => fallback.includes(k));
+    } catch { /* keep fallback */ }
+    const merged = saved.length ? [...saved, ...fallback.filter((k) => !saved.includes(k))] : fallback;
+    return [NAME_COL_KEY, ...merged.filter((k) => k !== NAME_COL_KEY)];
+  });
+  useEffect(() => { localStorage.setItem(FIELD_ORDER_KEY, JSON.stringify(fieldOrder)); }, [fieldOrder]);
+
+  const [hiddenFields, setHiddenFields] = useState<Set<ColKey>>(() => {
+    try {
+      const raw: ColKey[] = JSON.parse(localStorage.getItem(FIELD_HIDDEN_KEY) || '[]');
+      return new Set(raw.filter((k) => k !== NAME_COL_KEY));
+    } catch { return new Set(); }
+  });
+  useEffect(() => { localStorage.setItem(FIELD_HIDDEN_KEY, JSON.stringify([...hiddenFields])); }, [hiddenFields]);
+
+  const toggleField = (key: ColKey) => {
+    if (key === NAME_COL_KEY) return; // Name can never be hidden
+    setHiddenFields((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key); else n.add(key);
+      return n;
+    });
+  };
+  // Reorder a field relative to another (Name stays pinned at the front).
+  const moveField = (dragKey: ColKey, targetKey: ColKey, pos: 'before' | 'after') => {
+    if (dragKey === NAME_COL_KEY || targetKey === NAME_COL_KEY) return;
+    setFieldOrder((prev) => {
+      const order = prev.filter((k) => k !== dragKey);
+      const ti = order.indexOf(targetKey);
+      if (ti === -1) return prev;
+      order.splice(pos === 'before' ? ti : ti + 1, 0, dragKey);
+      return [NAME_COL_KEY, ...order.filter((k) => k !== NAME_COL_KEY)];
+    });
+  };
+
+  // Columns the table actually renders: ordered, with hidden ones removed (Name
+  // is always present and first). Drives the grid template, header, and rows.
+  const visibleColumns = useMemo(
+    () => fieldOrder.map((k) => colByKey.get(k)!).filter((c) => c && (c.key === NAME_COL_KEY || !hiddenFields.has(c.key))),
+    [fieldOrder, hiddenFields, colByKey]
+  );
+  const lastColKey = visibleColumns[visibleColumns.length - 1].key; // gets a right divider before the spacer
+
+  // ── Fields menu (open + anchor) ──────────────────────────────────────────────
+  const [fieldsMenu, setFieldsMenu] = useState<{ right: number; top: number } | null>(null);
+
   // Trailing spacer track gives the last column breathing room and a draggable resize handle.
-  const gridTemplateColumns = `${COLUMNS.map((c) => `${widths[c.key]}px`).join(' ')} ${SPACER_WIDTH}px`;
+  const gridTemplateColumns = `${visibleColumns.map((c) => `${widths[c.key]}px`).join(' ')} ${SPACER_WIDTH}px`;
 
   const startResize = (key: ColKey, e: React.MouseEvent) => {
     e.preventDefault();
@@ -1014,16 +1077,28 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               { label: 'Fields', icon: Columns3 },
               { label: 'Filter', icon: Filter },
               { label: 'Sort', icon: ArrowUpDown },
-            ] as const).map(({ label, icon: Icon }) => (
-              <button
-                key={label}
-                type="button"
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] text-white/45 hover:text-white hover:bg-white/5 transition-colors"
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            ))}
+            ] as const).map(({ label, icon: Icon }) => {
+              const isFields = label === 'Fields';
+              const active = isFields && !!fieldsMenu;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={(e) => {
+                    if (!isFields) return;
+                    if (fieldsMenu) { setFieldsMenu(null); return; }
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setFieldsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+                  }}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] transition-colors ${
+                    active ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1035,14 +1110,14 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             className="grid sticky top-0 z-30 bg-[#141414] border-b border-white/10 h-9"
             style={{ gridTemplateColumns }}
           >
-            {COLUMNS.map((c, idx) => (
+            {visibleColumns.map((c, idx) => (
               <div
                 key={c.key}
                 // The Name header gets the row's left padding so its label lines up with the row content.
                 style={idx === 0 ? { paddingLeft: 30 } : undefined}
                 className={`${headerCellCls} ${idx > 0 ? 'border-l border-white/8' : ''} ${
                   idx === 0 ? 'sticky left-0 z-10 bg-[#141414]' : ''
-                } ${idx === COLUMNS.length - 1 ? 'border-r border-white/8' : ''}`}
+                } ${idx === visibleColumns.length - 1 ? 'border-r border-white/8' : ''}`}
               >
                 <span className="truncate">{c.label}</span>
                 {/* Resize handle on the right edge */}
@@ -1080,6 +1155,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                   isCollapsed={collapsed.has(node.id)}
                   onToggleCollapse={toggleCollapse}
                   collPath={collPathFor(node.entry.todo)}
+                  columns={visibleColumns}
+                  lastColKey={lastColKey}
                 />
               ))}
             </SortableContext>
@@ -1111,6 +1188,20 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         </div>
         </div>
       </div>
+
+      {/* Fields menu — reorder (drag) + show/hide the table's columns */}
+      {fieldsMenu && createPortal(
+        <FieldsMenu
+          anchor={fieldsMenu}
+          order={fieldOrder}
+          colByKey={colByKey}
+          hidden={hiddenFields}
+          onMove={moveField}
+          onToggle={toggleField}
+          onClose={() => setFieldsMenu(null)}
+        />,
+        document.body
+      )}
 
       {/* Tags / Notes popover editor (portal, escapes the scroll container) */}
       {editing && editingEntry && editing.rect && createPortal(
@@ -1522,6 +1613,111 @@ const CollectionEditModal: React.FC<{
   );
 };
 
+// ── Fields menu ──────────────────────────────────────────────────────────────
+// Dropdown listing every column. Name is pinned first and locked; the rest can
+// be dragged to reorder (a drop line marks the target) and toggled hidden/shown.
+// Mirrors the sidebar's HTML5 drag-reorder, minus nesting (order only).
+const FieldsMenu: React.FC<{
+  anchor: { right: number; top: number };
+  order: ColKey[];
+  colByKey: Map<ColKey, ColDef>;
+  hidden: Set<ColKey>;
+  onMove: (dragKey: ColKey, targetKey: ColKey, pos: 'before' | 'after') => void;
+  onToggle: (key: ColKey) => void;
+  onClose: () => void;
+}> = ({ anchor, order, colByKey, hidden, onMove, onToggle, onClose }) => {
+  const [dragKey, setDragKey] = useState<ColKey | null>(null);
+  const [dropInfo, setDropInfo] = useState<{ key: ColKey; pos: 'before' | 'after' } | null>(null);
+
+  const onRowDragOver = (e: React.DragEvent, key: ColKey) => {
+    if (!dragKey || key === NAME_COL_KEY) { if (dropInfo) setDropInfo(null); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos: 'before' | 'after' = (e.clientY - rect.top) / rect.height < 0.5 ? 'before' : 'after';
+    setDropInfo((prev) => (prev?.key === key && prev.pos === pos ? prev : { key, pos }));
+  };
+  const commitDrop = () => {
+    if (dragKey && dropInfo && dropInfo.key !== dragKey) onMove(dragKey, dropInfo.key, dropInfo.pos);
+    setDragKey(null);
+    setDropInfo(null);
+  };
+
+  return (
+    <>
+      {/* Backdrop — click outside closes the menu */}
+      <div className="fixed inset-0 z-[65]" onMouseDown={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div
+        style={{ position: 'fixed', right: anchor.right, top: anchor.top }}
+        className="z-[66] w-60 rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-1"
+      >
+        <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-white/30">
+          Fields
+        </div>
+        <div
+          className="space-y-0.5"
+          onDragOver={(e) => { if (dragKey) e.preventDefault(); }}
+          onDrop={(e) => { e.preventDefault(); commitDrop(); }}
+        >
+          {order.map((key) => {
+            const col = colByKey.get(key);
+            if (!col) return null;
+            const isName = key === NAME_COL_KEY;
+            const isHidden = hidden.has(key);
+            const drop = dropInfo?.key === key ? dropInfo.pos : null;
+            return (
+              <div
+                key={key}
+                className="relative"
+                draggable={!isName}
+                onDragStart={(e) => {
+                  if (isName) return;
+                  setDragKey(key);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', key);
+                }}
+                onDragEnd={() => { setDragKey(null); setDropInfo(null); }}
+                onDragOver={(e) => onRowDragOver(e, key)}
+              >
+                {drop === 'before' && (
+                  <div className="pointer-events-none absolute -top-px left-2 right-2 z-10 h-0.5 rounded-full bg-[var(--accent2)]" />
+                )}
+                {drop === 'after' && (
+                  <div className="pointer-events-none absolute -bottom-px left-2 right-2 z-10 h-0.5 rounded-full bg-[var(--accent2)]" />
+                )}
+                <div
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-md ${
+                    dragKey === key ? 'opacity-40' : 'hover:bg-white/[0.06]'
+                  } ${isHidden ? 'text-white/40' : 'text-white/80'}`}
+                >
+                  {isName ? (
+                    <Lock size={13} className="shrink-0 text-white/25" />
+                  ) : (
+                    <GripVertical size={14} className="shrink-0 cursor-grab active:cursor-grabbing text-white/25 hover:text-white/60" />
+                  )}
+                  <span className="flex-1 truncate text-[13px]">{col.label}</span>
+                  {isName ? (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-white/25">Locked</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(key)}
+                      title={isHidden ? 'Show field' : 'Hide field'}
+                      className="shrink-0 p-0.5 rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                    >
+                      {isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+};
+
 // ── Row ──────────────────────────────────────────────────────────────────────
 interface HubRowProps {
   node: FlatNode;
@@ -1536,6 +1732,9 @@ interface HubRowProps {
   isCollapsed: boolean;
   onToggleCollapse: (id: string) => void;
   collPath: { id: string; name: string; color?: string }[];
+  // Ordered, visible columns (Name first) — drives which cells render and in what order.
+  columns: ColDef[];
+  lastColKey: ColKey; // the rightmost visible column, which gets a right divider
 }
 
 const HubRow: React.FC<HubRowProps> = ({
@@ -1551,6 +1750,8 @@ const HubRow: React.FC<HubRowProps> = ({
   isCollapsed,
   onToggleCollapse,
   collPath,
+  columns,
+  lastColKey,
 }) => {
   const { entry, hasChildren } = node;
   const { todo, date } = entry;
@@ -1570,7 +1771,7 @@ const HubRow: React.FC<HubRowProps> = ({
     <div
       onClick={(e) => startEdit(todo.id, col, e)}
       className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden cursor-pointer hover:bg-white/[0.03] ${
-        col === LAST_COL_KEY ? 'border-r border-white/8' : ''
+        col === lastColKey ? 'border-r border-white/8' : ''
       }`}
     >
       {children}
@@ -1663,6 +1864,93 @@ const HubRow: React.FC<HubRowProps> = ({
     );
   }
 
+  // Render a single non-Name cell by key. The cells are emitted in the order the
+  // Fields menu dictates (via the `columns` prop), so this switch maps key→JSX.
+  const renderCell = (col: ColKey) => {
+    switch (col) {
+      case 'status':
+        return (
+          <DisplayCell col="status">
+            {todo.status ? <OptionChip option={statusOption(todo.status)!} /> : muted}
+          </DisplayCell>
+        );
+      case 'priority':
+        return (
+          <DisplayCell col="priority">
+            {todo.priority ? <OptionChip option={priorityOption(todo.priority)!} /> : muted}
+          </DisplayCell>
+        );
+      case 'date':
+        return isEditing('date') ? (
+          <div className={editCellWrap}>
+            <DateField value={date || ''} autoFocus onBlur={stopEdit} onChange={saveDate} className={cellEditCls} />
+          </div>
+        ) : (
+          <DisplayCell col="date">
+            <span className="truncate text-sm text-white/90">
+              {date ? format(parseISO(date), 'MMM d, yyyy') : muted}
+            </span>
+          </DisplayCell>
+        );
+      case 'start':
+        return isEditing('start') ? (
+          <div className={editCellWrap}>
+            <StartTimeField value={todo.startTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
+          </div>
+        ) : (
+          <DisplayCell col="start">
+            <span className="truncate text-sm text-white/90">{todo.startTime ? formatTime12h(todo.startTime) : muted}</span>
+          </DisplayCell>
+        );
+      case 'end':
+        return isEditing('end') ? (
+          <div className={editCellWrap}>
+            <EndTimeField value={todo.endTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
+          </div>
+        ) : (
+          <DisplayCell col="end">
+            <span className="truncate text-sm text-white/90">{todo.endTime ? formatTime12h(todo.endTime) : muted}</span>
+          </DisplayCell>
+        );
+      case 'percent':
+        return isEditing('percent') ? (
+          <div className={editCellWrap}>
+            <PercentField value={todo.percentageGoal} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
+          </div>
+        ) : (
+          <DisplayCell col="percent">
+            <span className="truncate text-sm text-white/90">
+              {todo.percentageGoal !== undefined ? `${todo.percentageGoal}%` : muted}
+            </span>
+          </DisplayCell>
+        );
+      case 'collection':
+        return (
+          <DisplayCell col="collection">
+            {collPath.length ? <CollectionBreadcrumb path={collPath} /> : muted}
+          </DisplayCell>
+        );
+      case 'xp':
+        return isEditing('xp') ? (
+          <div className={editCellWrap}>
+            <XpField value={todo.xp} autoFocus onBlur={stopEdit} onChange={(val) => saveField({ xp: val })} className={cellEditCls} />
+          </div>
+        ) : (
+          <DisplayCell col="xp">
+            <span className="truncate text-sm text-white/90">{todo.xp !== undefined ? `${todo.xp}` : muted}</span>
+          </DisplayCell>
+        );
+      case 'notes':
+        return (
+          <DisplayCell col="notes">
+            {todo.notes ? <span className="truncate text-sm text-white/90">{todo.notes}</span> : muted}
+          </DisplayCell>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -1740,88 +2028,10 @@ const HubRow: React.FC<HubRowProps> = ({
         </div>
       </div>
 
-      {/* Status (opens popover) */}
-      <DisplayCell col="status">
-        {todo.status ? <OptionChip option={statusOption(todo.status)!} /> : muted}
-      </DisplayCell>
-
-      {/* Priority (opens popover) */}
-      <DisplayCell col="priority">
-        {todo.priority ? <OptionChip option={priorityOption(todo.priority)!} /> : muted}
-      </DisplayCell>
-
-      {/* Date */}
-      {isEditing('date') ? (
-        <div className={editCellWrap}>
-          <DateField value={date || ''} autoFocus onBlur={stopEdit} onChange={saveDate} className={cellEditCls} />
-        </div>
-      ) : (
-        <DisplayCell col="date">
-          <span className="truncate text-sm text-white/90">
-            {date ? format(parseISO(date), 'MMM d, yyyy') : muted}
-          </span>
-        </DisplayCell>
-      )}
-
-      {/* Start time */}
-      {isEditing('start') ? (
-        <div className={editCellWrap}>
-          <StartTimeField value={todo.startTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-        </div>
-      ) : (
-        <DisplayCell col="start">
-          <span className="truncate text-sm text-white/90">{todo.startTime ? formatTime12h(todo.startTime) : muted}</span>
-        </DisplayCell>
-      )}
-
-      {/* End time */}
-      {isEditing('end') ? (
-        <div className={editCellWrap}>
-          <EndTimeField value={todo.endTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-        </div>
-      ) : (
-        <DisplayCell col="end">
-          <span className="truncate text-sm text-white/90">{todo.endTime ? formatTime12h(todo.endTime) : muted}</span>
-        </DisplayCell>
-      )}
-
-      {/* Percent */}
-      {isEditing('percent') ? (
-        <div className={editCellWrap}>
-          <PercentField value={todo.percentageGoal} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-        </div>
-      ) : (
-        <DisplayCell col="percent">
-          <span className="truncate text-sm text-white/90">
-            {todo.percentageGoal !== undefined ? `${todo.percentageGoal}%` : muted}
-          </span>
-        </DisplayCell>
-      )}
-
-      {/* Tags (opens popover) */}
-      <DisplayCell col="collection">
-        {collPath.length ? <CollectionBreadcrumb path={collPath} /> : muted}
-      </DisplayCell>
-
-      {/* XP */}
-      {isEditing('xp') ? (
-        <div className={editCellWrap}>
-          <XpField value={todo.xp} autoFocus onBlur={stopEdit} onChange={(val) => saveField({ xp: val })} className={cellEditCls} />
-        </div>
-      ) : (
-        <DisplayCell col="xp">
-          <span className="truncate text-sm text-white/90">{todo.xp !== undefined ? `${todo.xp}` : muted}</span>
-        </DisplayCell>
-      )}
-
-      {/* Notes (opens popover) */}
-      <DisplayCell col="notes">
-        {todo.notes ? (
-          <span className="truncate text-sm text-white/90">{todo.notes}</span>
-        ) : (
-          muted
-        )}
-      </DisplayCell>
+      {/* Field cells — rendered in the order/visibility set by the Fields menu. */}
+      {columns
+        .filter((c) => c.key !== NAME_COL_KEY)
+        .map((c) => <React.Fragment key={c.key}>{renderCell(c.key)}</React.Fragment>)}
     </div>
   );
 };
