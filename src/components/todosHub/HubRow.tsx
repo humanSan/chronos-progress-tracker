@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { format, parseISO } from 'date-fns';
-import { GripVertical, MoreHorizontal, ChevronRight, ChevronDown } from 'lucide-react';
+import { GripVertical, MoreHorizontal, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { Todo } from '../../types';
 import { formatTime12h } from '../../utils/timeUtils';
 import {
@@ -31,6 +31,7 @@ interface HubRowProps {
   startEdit: (id: string, col: ColKey, e: React.MouseEvent) => void;
   stopEdit: () => void;
   onSaveTodo: (oldDate: string | null, newDate: string | null, updatedTodo: Todo) => void;
+  onAddSubtask: (parentId: string) => string;
   onToggleTodo: (id: string) => void;
   openMenu: (id: string, x: number, y: number) => void;
   isCollapsed: boolean;
@@ -43,6 +44,8 @@ interface HubRowProps {
   hideDragHandle?: boolean;
   // Visible (post-filter) task count shown on collection header rows.
   taskCount?: number;
+  // Quick-add a task under a collection: auto-expands and enters edit mode.
+  onQuickAddTask?: (parentId: string) => void;
   // ── Native drag & drop (sidebar-style: indicator only, nothing shifts) ──────
   isDragSource?: boolean;          // this row is the one being dragged (dim it)
   dropIndicator?: DropIndicator;   // where the drop will land, drawn on this row
@@ -61,6 +64,7 @@ export const HubRow: React.FC<HubRowProps> = ({
   stopEdit,
   onSaveTodo,
   onToggleTodo,
+  onAddSubtask,
   openMenu,
   isCollapsed,
   onToggleCollapse,
@@ -69,6 +73,7 @@ export const HubRow: React.FC<HubRowProps> = ({
   lastColKey,
   hideDragHandle = false,
   taskCount,
+  onQuickAddTask,
   isDragSource = false,
   dropIndicator = null,
   onRowDragStart,
@@ -160,7 +165,7 @@ export const HubRow: React.FC<HubRowProps> = ({
         style={style}
         {...dropProps}
         onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
-        className={`relative grid items-center min-h-11 border-b pt-3 border-white/8 group/row ${
+        className={`relative grid items-center min-h-12 border-b pt-3 border-white/8 group/row ${
           isDragSource ? 'opacity-40' : 'hover:bg-white/[0.015]'
         }`}
       >
@@ -181,10 +186,10 @@ export const HubRow: React.FC<HubRowProps> = ({
               className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
               title={isCollapsed ? 'Expand collection' : 'Collapse collection'}
             >
-              {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
             </button>
           ) : (
-            <span className="shrink-0 w-5" />
+            <span className="shrink-0 w-5.5" />
           )}
 
           {dragHandle('mr-1')}
@@ -200,20 +205,20 @@ export const HubRow: React.FC<HubRowProps> = ({
               placeholder="Collection name"
               size={1}
               style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="w-auto min-w-[60px] max-w-full [field-sizing:content] rounded-full px-2.5 text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
+              className="w-auto min-w-[60px] max-w-full [field-sizing:content] rounded-full px-2.5 py-px text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
             />
           ) : (
             <span
               onClick={(e) => startEdit(todo.id, 'title', e)}
               style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="min-w-0 max-w-full truncate rounded-full px-2.5 text-sm font-medium cursor-text"
+              className="min-w-0 max-w-full truncate rounded-full px-2.5 py-px text-sm font-medium cursor-text"
             >
               {todo.text || 'Untitled collection'}
             </span>
           )}
 
-          {taskCount !== undefined && !isEditing('title') && (
-            <span className="shrink-0 text-xs px-1.5 text-white/35 font-mono">{taskCount}</span>
+          {taskCount !== undefined && (
+            <span className="shrink-0 text-xs px-1.5 text-white/40 font-mono">{taskCount}</span>
           )}
 
           <button
@@ -224,9 +229,20 @@ export const HubRow: React.FC<HubRowProps> = ({
               const r = e.currentTarget.getBoundingClientRect();
               openMenu(todo.id, r.left, r.bottom + 4);
             }}
+            className="shrink-0 mr-0.5 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          <button
+            type="button"
+            title="Add task"
+            onClick={() => {
+              onQuickAddTask ? onQuickAddTask(todo.id) : onAddSubtask(todo.id);
+            }}
             className="shrink-0 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
           >
-            <MoreHorizontal size={15} />
+            <Plus size={18} />
           </button>
         </div>
       </div>
@@ -346,15 +362,15 @@ export const HubRow: React.FC<HubRowProps> = ({
               className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
               title={isCollapsed ? 'Expand subtasks' : 'Collapse subtasks'}
             >
-              {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+              {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
             </button>
           ) : (
-            <span className="shrink-0 w-5" />
+            <span className="shrink-0 w-5.5" />
           )}
 
           {dragHandle()}
 
-          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} className='mr-2 ml-1'/>
+          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={18} className='mr-1 ml-1'/>
 
           {isEditing('title') ? (
             <input
@@ -371,7 +387,7 @@ export const HubRow: React.FC<HubRowProps> = ({
             <>
               <span
                 onClick={(e) => startEdit(todo.id, 'title', e)}
-                className={`flex-1 truncate text-sm cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
+                className={`flex-1 h-full content-center truncate pl-1 text-sm cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
               >
                 {todo.text || <span className="text-white/40">Untitled</span>}
               </span>
@@ -383,9 +399,9 @@ export const HubRow: React.FC<HubRowProps> = ({
                   const r = e.currentTarget.getBoundingClientRect();
                   openMenu(todo.id, r.left, r.bottom + 4);
                 }}
-                className="shrink-0 mr-1 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
+                className="shrink-0 mr-1.5 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
               >
-                <MoreHorizontal size={15} />
+                <MoreHorizontal size={18} />
               </button>
             </>
           )}

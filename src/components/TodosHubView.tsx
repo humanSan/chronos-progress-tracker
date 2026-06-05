@@ -686,6 +686,11 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     }
     setEditing({ id, col: 'title', rect: null });
   };
+  const handleQuickAddTask = (parentId: string) => {
+    const id = onAddSubtask(parentId);
+    setCollapsed((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
+    setEditing({ id, col: 'title', rect: null });
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1328,6 +1333,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 stopEdit={stopEdit}
                 onSaveTodo={onSaveTodo}
                 onToggleTodo={handleToggleTodo}
+                onAddSubtask={onAddSubtask}
+                onQuickAddTask={handleQuickAddTask}
                 openMenu={openMenu}
                 isCollapsed={collapsed.has(node.id)}
                 onToggleCollapse={toggleCollapse}
@@ -1365,6 +1372,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                   stopEdit={stopEdit}
                   onSaveTodo={onSaveTodo}
                   onToggleTodo={handleToggleTodo}
+                  onAddSubtask={onAddSubtask}
+                  onQuickAddTask={handleQuickAddTask}
                   openMenu={openMenu}
                   isCollapsed={collapsed.has(row.node.id)}
                   onToggleCollapse={toggleCollapse}
@@ -1388,7 +1397,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             onClick={handleNewInView}
             className="flex items-center gap-2 w-full h-9 px-3 text-sm text-white/60 hover:text-white hover:bg-white/3 border-b border-white/8 cursor-pointer transition-colors"
           >
-            <Plus size={14} />
+            <Plus size={15} />
             <span>New</span>
           </button>
 
@@ -1537,9 +1546,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    onAddSubtask(menu.id);
+                    const id = onAddSubtask(menu.id);
                     setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
                     closeMenu();
+                    setEditing({ id, col: 'title', rect: null });
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >
@@ -1586,9 +1596,10 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    onAddSubtask(menu.id);
+                    const id = onAddSubtask(menu.id);
                     setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
                     closeMenu();
+                    setEditing({ id, col: 'title', rect: null });
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
                 >

@@ -19,7 +19,7 @@ export const GroupHeaderRow: React.FC<{
     <div
       onDragOver={onHeaderDragOver}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onHeaderDrop?.(); }}
-      className="relative flex items-center w-full min-h-11 border-b pt-3 border-white/8 hover:bg-white/[0.015]"
+      className="relative flex items-center w-full min-h-12 border-b pt-3 border-white/8 hover:bg-white/[0.015]"
     >
       {/* Drop line under the header — task lands at the top of this section. */}
       {isDropTarget && (
@@ -42,7 +42,7 @@ export const GroupHeaderRow: React.FC<{
         </button>
         <span
           style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-          className="min-w-0 truncate rounded-full px-2.5 text-sm font-medium"
+          className="min-w-0 truncate rounded-full px-2.5 py-px text-sm font-medium"
         >
           {label}
         </span>
