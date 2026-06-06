@@ -5,7 +5,6 @@ import { Todo } from '../../types';
 import { formatTime12h } from '../../utils/timeUtils';
 import {
   CompletedToggle,
-  DateField,
   StartTimeField,
   EndTimeField,
   PercentField,
@@ -89,7 +88,6 @@ export const HubRow: React.FC<HubRowProps> = ({
 
   const isEditing = (col: ColKey) => editing?.id === todo.id && editing?.col === col;
   const saveField = (patch: Partial<Todo>) => onSaveTodo(date, date, { ...todo, ...patch });
-  const saveDate = (v: string) => onSaveTodo(date, v || null, todo);
 
   // Drop handlers shared by both row variants. stopPropagation so the table's
   // container-level onDrop (a fallback for releases over the header/gaps) doesn't
@@ -143,11 +141,16 @@ export const HubRow: React.FC<HubRowProps> = ({
   // Empty fields render nothing — a placeholder dash just adds clutter.
   const muted = null;
 
-  // A clickable display cell that switches into edit mode.
-  const DisplayCell: React.FC<{ col: ColKey; children: React.ReactNode }> = ({ col, children }) => (
+  // A clickable display cell that switches into edit mode. `active` adds the
+  // accent ring that inline-edited cells get from `cellEditCls`; cells whose
+  // editor lives in a popover (currently the date column) opt into it so the
+  // cell visibly reflects that it's being edited.
+  const DisplayCell: React.FC<{ col: ColKey; children: React.ReactNode; active?: boolean }> = ({ col, children, active }) => (
     <div
       onClick={(e) => startEdit(todo.id, col, e)}
       className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden cursor-pointer hover:bg-white/[0.03] ${
+        active ? 'ring-1 ring-inset ring-[var(--accent2)]/60' : ''
+      } ${
         col === lastColKey ? 'border-r border-white/8' : ''
       }`}
     >
@@ -266,12 +269,8 @@ export const HubRow: React.FC<HubRowProps> = ({
           </DisplayCell>
         );
       case 'date':
-        return isEditing('date') ? (
-          <div className={editCellWrap}>
-            <DateField value={date || ''} autoFocus onBlur={stopEdit} onChange={saveDate} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="date">
+        return (
+          <DisplayCell col="date" active={isEditing('date')}>
             <span className="truncate text-sm text-white/90">
               {date ? format(parseISO(date), 'MMM d, yyyy') : muted}
             </span>

@@ -44,6 +44,7 @@ import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
 } from './todoFields';
+import { CalendarInput } from './CalendarInput';
 import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule, SectionsConfig, DEFAULT_SECTIONS_CONFIG, GroupRow } from './todosHub/types';
 import {
   MIN_COL_WIDTH,
@@ -310,7 +311,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // (vs. a full-screen overlay) lets the click also land on another cell, so a single
   // click both closes this editor and opens the next one.
   const popoverRef = useRef<HTMLDivElement>(null);
-  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority'];
+  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority', 'date'];
   const popoverOpen = !!editing && POPOVER_COLS.includes(editing.col);
   useEffect(() => {
     if (!popoverOpen) return;
@@ -1477,9 +1478,15 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               position: 'fixed',
               left: editing.rect.left,
               top: editing.rect.bottom + 4,
-              width: Math.max(editing.rect.width, editing.col === 'status' || editing.col === 'priority' ? 180 : 260),
+              width: editing.col === 'date'
+                ? 240
+                : Math.max(editing.rect.width, editing.col === 'status' || editing.col === 'priority' ? 180 : 260),
             }}
-            className="z-[58] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-2"
+            className={
+              editing.col === 'date'
+                ? 'z-[58] shadow-2xl'
+                : 'z-[58] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-2'
+            }
           >
             {editing.col === 'status' || editing.col === 'priority' ? (
               <OptionSelectField
@@ -1503,6 +1510,14 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 onChange={(id) => { onSetTaskCollection(editingEntry.todo.id, id); stopEdit(); }}
                 onCreate={onCreateCollection}
                 autoFocus
+              />
+            ) : editing.col === 'date' ? (
+              <CalendarInput
+                value={editingEntry.date || ''}
+                autoFocus
+                onChange={(val) => {
+                  onSaveTodo(editingEntry.date, val || null, editingEntry.todo);
+                }}
               />
             ) : (
               <NotesField
