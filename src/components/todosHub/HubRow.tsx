@@ -208,7 +208,7 @@ export const HubRow: React.FC<HubRowProps> = ({
               placeholder="Collection name"
               size={1}
               style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="w-auto min-w-[60px] max-w-full [field-sizing:content] rounded-full px-2.5 py-px text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
+              className="w-auto min-w-0 max-w-full field-sizing-content rounded-full px-2.5 py-px text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
             />
           ) : (
             <span

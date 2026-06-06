@@ -1580,8 +1580,18 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               <CalendarInput
                 value={editingEntry.date || ''}
                 autoFocus
+                showInDailyList={editingEntry.todo.showInDailyList ?? false}
+                onShowInDailyListChange={(val) => {
+                  onSaveTodo(editingEntry.date, editingEntry.date, {
+                    ...editingEntry.todo,
+                    showInDailyList: val,
+                  });
+                }}
                 onChange={(val) => {
-                  onSaveTodo(editingEntry.date, val || null, editingEntry.todo);
+                  const updatedTodo = !val
+                    ? { ...editingEntry.todo, showInDailyList: false }
+                    : editingEntry.todo;
+                  onSaveTodo(editingEntry.date, val || null, updatedTodo);
                 }}
               />
             ) : (

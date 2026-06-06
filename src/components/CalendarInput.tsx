@@ -7,6 +7,8 @@ interface CalendarInputProps {
   onChange: (val: string) => void;
   className?: string;
   autoFocus?: boolean;
+  showInDailyList?: boolean;
+  onShowInDailyListChange?: (val: boolean) => void;
 }
 
 function toIso(d: Date): string {
@@ -28,6 +30,8 @@ export const CalendarInput: React.FC<CalendarInputProps> = ({
   onChange,
   className,
   autoFocus,
+  showInDailyList = false,
+  onShowInDailyListChange,
 }) => {
   const [text, setText] = useState(() => {
     if (!value) return '';
@@ -102,6 +106,7 @@ export const CalendarInput: React.FC<CalendarInputProps> = ({
   const handleClear = () => {
     onChange('');
     setText('');
+    if (showInDailyList) onShowInDailyListChange?.(false);
   };
 
   const focusDate = value && isValid(parseISO(value)) ? parseISO(value) : new Date();
@@ -143,6 +148,27 @@ export const CalendarInput: React.FC<CalendarInputProps> = ({
           Next Week
         </button>
       </div>
+      {onShowInDailyListChange && (
+        <div className={`flex items-center justify-between mt-2 px-0.5 ${!value ? 'opacity-40' : ''}`}>
+          <span className="text-[11px] text-white/60">Send to daily list</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showInDailyList}
+            disabled={!value}
+            onClick={() => { if (value) onShowInDailyListChange(!showInDailyList); }}
+            className={`relative shrink-0 w-8 h-[18px] rounded-full transition-colors duration-200 focus:outline-none ${
+              showInDailyList && value ? 'bg-[var(--accent2)]' : 'bg-white/15'
+            } ${!value ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <span
+              className={`absolute top-[2px] left-0 w-[14px] h-[14px] bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                showInDailyList && value ? 'translate-x-[16px]' : 'translate-x-[2px]'
+              }`}
+            />
+          </button>
+        </div>
+      )}
       <div className="mt-2">
         <Calendar
           currentMonth={currentMonth}
