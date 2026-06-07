@@ -53,10 +53,13 @@ export interface Todo {
   xp?: number;             // Points granted on completion (XP system TBD)
   createdAt: number;       // Timestamp (ms) when todo was created
   completedAt?: number;    // Timestamp (ms) when status was set to 'completed'
+  deletedAt?: number;      // Timestamp (ms) when the todo was deleted
   trackingStartedAt?: number; // Timestamp when tracking started
-  showInDatabase?: boolean;   // When true, the todo appears in the Task Planner
-                              // (organizer). See src/utils/todoFilters.ts for
-                              // how this interacts with the daily checklist.
+  showInDatabase?: boolean;   // When true, the todo appears in the Task Planner.
+  showInDailyList?: boolean;  // When true, the todo appears in the daily checklist
+                              // for the date it is filed under. Independent of
+                              // showInDatabase — a task can be in the Task Planner
+                              // only, daily list only, or both.
   archived?: boolean;         // When true, hidden from the Task Planner (shown in a
                               // future archived view). Distinct from a daily-only
                               // todo (showInDatabase false) — an archived todo is

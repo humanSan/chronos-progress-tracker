@@ -1,6 +1,6 @@
 // ── Layout ───────────────────────────────────────────────────────────────────
 export const MIN_COL_WIDTH = 80;
-export const INDENT = 24  ; // px per nesting level (must match getProjection)
+export const INDENT = 24; // px per nesting level (indent + drop-indicator offset)
 export const NAME_BASE_PAD = 6; // px of breathing room between the left edge and the top-level controls
 export const TABLE_PAD = 0; // px of horizontal whitespace framing the table (left margin + right gutter)
 export const TABLE_GUTTER = 64;
@@ -36,7 +36,7 @@ export const colorName = (c: string) => COLLECTION_COLOR_NAMES[c] || 'Custom';
 
 // Pill label color: lighten the collection color toward white so the name reads
 // with high contrast against the dark tinted-bg pill.
-export const pillTextColor = (color: string) => `color-mix(in srgb, ${color} 60%, white)`;
+export const pillTextColor = (color: string) => `color-mix(in srgb, ${color} 40%, white)`;
 
 // ── Persistence keys ─────────────────────────────────────────────────────────
 export const WIDTHS_KEY = 'dun-hub-col-widths';

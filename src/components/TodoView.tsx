@@ -98,13 +98,15 @@ export const TodoView: React.FC<TodoViewProps> = ({
       id: Math.random().toString(36).substr(2, 9),
       text: vals.text,
       completed: false,
+      showInDailyList: true,
       notes: vals.notes || undefined,
       startTime: vals.startTime,
       dueTime: vals.dueTime,
       duePercentage: vals.duePercentage,
       xp: vals.xp,
       parentId: vals.collectionId ?? undefined,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      status: "todo",
     };
 
     const target = vals.date;

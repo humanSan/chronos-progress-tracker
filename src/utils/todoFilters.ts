@@ -8,18 +8,24 @@ import { Todo, DayTodos } from '../types';
 //   • The Task Planner — a database-style organizer for important things you plan
 //     ahead of time.
 //
-// A single boolean on the todo, `showInDatabase`, plus whether the todo has a
-// date assigned, decides where it appears. There is intentionally NO two-way
-// sync: these helpers just read the existing data and decide visibility.
+// Two independent booleans control visibility:
+//   • showInDatabase — show in Task Planner
+//   • showInDailyList — show in the daily checklist for the date it is filed under
 //
-//   showInDatabase | has date | Daily checklist | Task Planner
-//   ---------------|----------|-----------------|-----------
-//        true      |   no     |       no        |    yes
-//        true      |   yes    |      yes        |    yes
-//        false     |   any    |      yes*       |    no
+// Tasks created in the Task Planner default to showInDatabase=true, showInDailyList=false.
+// Tasks created in the daily list default to showInDatabase=false, showInDailyList=true.
+// To show a Task Planner task on a specific day, assign a date and enable the
+// "Send to daily list" toggle in the date picker (sets showInDailyList=true).
 //
-//   * a `false` todo only ever shows on the day it's filed under; a dateless
-//     `false` todo has no day to live on, so it shows nowhere.
+//   showInDatabase | showInDailyList | has date | Daily checklist | Task Planner
+//   ---------------|-----------------|----------|-----------------|-----------
+//        true      |     false       |   any    |       no        |    yes
+//        true      |     true        |   yes    |      yes        |    yes
+//        false     |     true        |   yes    |      yes        |    no
+//
+// Legacy todos without showInDailyList set fall back to the old rule:
+//   • showInDatabase=true → daily list only if it has a date (old "both" behaviour)
+//   • showInDatabase unset/false → always on daily list if it has a date
 //
 // Dates live on the `DayTodos` wrapper, not the todo itself. A todo with "no
 // date assigned" is one filed under the UNDATED bucket below (same dayTodos
@@ -36,9 +42,12 @@ export const UNDATED = '__undated__';
 export const hasDate = (date: string): boolean => !!date && date !== UNDATED;
 
 // Whether a todo filed under `date` should appear on the daily checklist.
-// Every dated todo does, regardless of showInDatabase; undated todos never do.
-export function showsOnDailyChecklist(_todo: Todo, date: string): boolean {
-  return hasDate(date);
+// Uses showInDailyList when set; falls back to legacy rule for old todos.
+export function showsOnDailyChecklist(todo: Todo, date: string): boolean {
+  if (!hasDate(date)) return false;
+  if (todo.showInDailyList !== undefined) return todo.showInDailyList === true;
+  // Legacy: daily-only todos (showInDatabase not explicitly true) kept old behaviour.
+  return todo.showInDatabase !== true;
 }
 
 // Whether a todo should appear in the Task Planner (organizer). Only todos
