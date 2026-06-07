@@ -112,7 +112,10 @@ export const CalendarInput: React.FC<CalendarInputProps> = ({
   const focusDate = value && isValid(parseISO(value)) ? parseISO(value) : new Date();
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (autoFocus) inputRef.current?.focus();
+    if (autoFocus) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
   }, [autoFocus]);
 
   return (

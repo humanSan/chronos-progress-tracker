@@ -46,6 +46,8 @@ import {
   PRIORITY_OPTIONS,
 } from './todoFields';
 import { CalendarInput } from './CalendarInput';
+import { TimeInput } from './TimeInput';
+import { timeToPercentage } from '../utils/timeUtils';
 import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule, SectionsConfig, DEFAULT_SECTIONS_CONFIG, GroupRow } from './todosHub/types';
 import {
   MIN_COL_WIDTH,
@@ -298,7 +300,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     setSortMenu(null);
   }, [selectedView]);
 
-  const gridTemplateColumns = visibleColumns.map((c) => `${widths[c.key]}px`).join(' ');
+  const gridTemplateColumns = visibleColumns.map((c) => `${widths[c.key]}px`).join(' ') + ' minmax(80px, 1fr)';
 
   const startResize = (key: ColKey, e: React.MouseEvent) => {
     e.preventDefault();
@@ -328,7 +330,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // (vs. a full-screen overlay) lets the click also land on another cell, so a single
   // click both closes this editor and opens the next one.
   const popoverRef = useRef<HTMLDivElement>(null);
-  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority', 'date'];
+  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority', 'date', 'start', 'end'];
   const popoverOpen = !!editing && POPOVER_COLS.includes(editing.col);
   useEffect(() => {
     if (!popoverOpen) return;
@@ -1250,7 +1252,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       {/* Right pane — header + task table */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Page header — tight, Notion-like */}
-        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-4 pb-3">
+        <div className="shrink-0 flex items-center gap-2.5 mx-4 pt-4 pb-2">
           <button
             type="button"
             onClick={() => setSidebarHidden((v) => !v)}
@@ -1276,7 +1278,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         </div>
 
         {/* View toolbar — UI scaffold only; none of these are wired up yet. */}
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 pb-2.5">
+        <div className="shrink-0 flex items-center justify-between gap-3 mx-4 pb-4">
           {/* View tabs */}
           <div className="flex items-center gap-1">
             {([
@@ -1384,7 +1386,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           // commits the current indicator. Row/header onDrop call stopPropagation
           // so this never double-fires.
           onDrop={(e) => { e.preventDefault(); onRowDrop(); }}
-          className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full"
+          className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full mx-4"
         >
         
         {/* Header row — full-bleed bar: its background + bottom border span the
@@ -1412,6 +1414,9 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                 />
               </div>
             ))}
+            {/* Spacer: absorbs leftover width when the table doesn't scroll; gives
+                the last column's resize handle room to expand into when it does. */}
+            <div />
           </div>
 
         <div className="w-max min-w-full text-white" style={{ paddingLeft: TABLE_PAD, paddingRight: TABLE_PAD }}>
@@ -1579,12 +1584,12 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
               position: 'fixed',
               left: popoverPos?.left ?? editing.rect.left,
               top: popoverPos?.top ?? editing.rect.bottom + 4,
-              width: editing.col === 'date'
+              width: editing.col === 'date' || editing.col === 'start' || editing.col === 'end'
                 ? 240
                 : Math.max(editing.rect.width, editing.col === 'status' || editing.col === 'priority' ? 180 : 260),
             }}
             className={
-              editing.col === 'date'
+              editing.col === 'date' || editing.col === 'start' || editing.col === 'end'
                 ? 'z-[58] shadow-2xl'
                 : 'z-[58] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-2'
             }
@@ -1628,6 +1633,31 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                     ? { ...editingEntry.todo, showInDailyList: false }
                     : editingEntry.todo;
                   onSaveTodo(editingEntry.date, val || null, updatedTodo);
+                }}
+              />
+            ) : editing.col === 'start' ? (
+              <TimeInput
+                value={editingEntry.todo.startTime}
+                autoFocus
+                onChange={(val) =>
+                  onSaveTodo(editingEntry.date, editingEntry.date, {
+                    ...editingEntry.todo,
+                    startTime: val || undefined,
+                  })
+                }
+              />
+            ) : editing.col === 'end' ? (
+              <TimeInput
+                value={editingEntry.todo.dueTime}
+                autoFocus
+                onChange={(val) => {
+                  // Keep duePercentage in sync with the end time (mirrors EndTimeField).
+                  const p = timeToPercentage(val);
+                  onSaveTodo(editingEntry.date, editingEntry.date, {
+                    ...editingEntry.todo,
+                    dueTime: val || undefined,
+                    ...(p !== undefined ? { duePercentage: p } : {}),
+                  });
                 }}
               />
             ) : (

@@ -5,8 +5,6 @@ import { Todo } from '../../types';
 import { formatTime12h } from '../../utils/timeUtils';
 import {
   CompletedToggle,
-  StartTimeField,
-  EndTimeField,
   PercentField,
   XpField,
   CollectionBreadcrumb,
@@ -277,22 +275,14 @@ const HubRowImpl: React.FC<HubRowProps> = ({
           </DisplayCell>
         );
       case 'start':
-        return isEditing('start') ? (
-          <div className={editCellWrap}>
-            <StartTimeField value={todo.startTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="start">
+        return (
+          <DisplayCell col="start" active={isEditing('start')}>
             <span className="truncate text-sm text-white/90">{todo.startTime ? formatTime12h(todo.startTime) : muted}</span>
           </DisplayCell>
         );
       case 'end':
-        return isEditing('end') ? (
-          <div className={editCellWrap}>
-            <EndTimeField value={todo.dueTime} autoFocus onBlur={stopEdit} onChange={saveField} className={cellEditCls} />
-          </div>
-        ) : (
-          <DisplayCell col="end">
+        return (
+          <DisplayCell col="end" active={isEditing('end')}>
             <span className="truncate text-sm text-white/90">{todo.dueTime ? formatTime12h(todo.dueTime) : muted}</span>
           </DisplayCell>
         );
@@ -411,6 +401,8 @@ const HubRowImpl: React.FC<HubRowProps> = ({
       {columns
         .filter((c) => c.key !== NAME_COL_KEY)
         .map((c) => <React.Fragment key={c.key}>{renderCell(c.key)}</React.Fragment>)}
+      {/* Spacer track — fills remaining width, mirrors the header spacer. */}
+      <div />
     </div>
   );
 };
