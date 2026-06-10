@@ -1252,7 +1252,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       {/* Right pane — header + task table */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Page header — tight, Notion-like */}
-        <div className="shrink-0 flex items-center gap-2.5 mx-4 pt-4 pb-2">
+        <div className="shrink-0 flex items-center gap-2.5 px-4 pt-4 pb-2">
           <button
             type="button"
             onClick={() => setSidebarHidden((v) => !v)}
@@ -1278,7 +1278,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         </div>
 
         {/* View toolbar — UI scaffold only; none of these are wired up yet. */}
-        <div className="shrink-0 flex items-center justify-between gap-3 mx-4 pb-4">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 pb-4">
           {/* View tabs */}
           <div className="flex items-center gap-1">
             {([
@@ -1386,7 +1386,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           // commits the current indicator. Row/header onDrop call stopPropagation
           // so this never double-fires.
           onDrop={(e) => { e.preventDefault(); onRowDrop(); }}
-          className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full mx-4"
+          className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full ml-4 pr-4"
         >
         
         {/* Header row — full-bleed bar: its background + bottom border span the
