@@ -3,14 +3,9 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import {
   Plus,
-  Archive,
-  Trash2,
-  Maximize2,
   ChevronRight,
   ChevronDown,
-  CornerDownRight,
   FolderPlus,
-  Palette,
   Layers,
   Inbox,
   PanelLeftClose,
@@ -24,7 +19,6 @@ import {
   ArrowUpDown,
   Box,
   Shapes,
-  Pencil,
 } from 'lucide-react';
 import { DayTodos, Todo, Workspace } from '../types';
 import {
@@ -37,23 +31,12 @@ import {
   collectionPath,
 } from '../utils/todoFilters';
 import { TodoFullView } from './TodoFullView';
-import {
-  NotesField,
-  CollectionSearchField,
-  OptionSelectField,
-  CollectionBreadcrumb,
-  STATUS_OPTIONS,
-  PRIORITY_OPTIONS,
-} from './todoFields';
-import { CalendarInput } from './CalendarInput';
-import { TimeInput } from './TimeInput';
-import { timeToPercentage } from '../utils/timeUtils';
+import { CollectionBreadcrumb } from './todoFields';
 import { ColKey, ColDef, COLUMNS, NAME_COL_KEY, EditState, FilterRule, SortRule, SectionsConfig, DEFAULT_SECTIONS_CONFIG, GroupRow } from './todosHub/types';
 import {
   MIN_COL_WIDTH,
   TABLE_PAD,
   BOTTOM_SPACER,
-  COLLECTION_COLORS,
   DEFAULT_COLLECTION_COLOR,
   WIDTHS_KEY,
   VIEWS_KEY,
@@ -69,7 +52,8 @@ import {
 } from './todosHub/constants';
 import { flattenTree, orderFromFlat } from './todosHub/treeUtils';
 import { useDragAutoScroll } from './todosHub/useDragAutoScroll';
-import { getFieldDisplayValue, getFieldRawValue, compareRawValues, matchesFilter, buildGroupedItems, groupAssignmentPatch } from './todosHub/viewUtils';
+import { usePersistentState, setCodec, stringCodec } from './todosHub/usePersistentState';
+import { getFieldDisplayValue, getFieldRawValue, compareRawValues, matchesFilter, buildGroupedItems, groupAssignmentPatch, groupCreateSpec } from './todosHub/viewUtils';
 import { HubRow } from './todosHub/HubRow';
 import { FieldsMenu } from './todosHub/FieldsMenu';
 import { FilterMenu } from './todosHub/FilterMenu';
@@ -77,6 +61,9 @@ import { SortMenu } from './todosHub/SortMenu';
 import { SectionsMenu } from './todosHub/SectionsMenu';
 import { GroupHeaderRow } from './todosHub/GroupHeaderRow';
 import { CollectionEditModal } from './todosHub/CollectionEditModal';
+import { CellEditorPopover } from './todosHub/CellEditorPopover';
+import { RowContextMenu } from './todosHub/RowContextMenu';
+import { DeleteCollectionModal } from './todosHub/DeleteCollectionModal';
 
 // Returns a callback with a stable identity across renders that always invokes
 // the latest version of `fn`. Lets us pass handlers to React.memo'd rows without
@@ -95,7 +82,10 @@ interface TodosHubViewProps {
   onCreateCollection: (name: string) => string;
   // Save an edited todo, moving it between date buckets when its date changes.
   onSaveTodo: (oldDate: string | null, newDate: string | null, updatedTodo: Todo) => void;
-  onAddTodo: () => string;
+  // Create a top-level hub task. `opts` lets a grouped-view "+" seed the task
+  // with a calendar date and/or field patch (status/priority) so it lands in the
+  // section it was added from.
+  onAddTodo: (opts?: { date?: string | null; patch?: Partial<Todo> }) => string;
   onAddSubtask: (parentId: string) => string;
   // Create a fresh collection (top-level, or nested when a parentId is given);
   // returns its id for select + rename.
@@ -149,16 +139,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   );
 
   // ── Collapse state (persisted) ─────────────────────────────────────────────
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    try {
-      return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]'));
-    } catch {
-      return new Set<string>();
-    }
-  });
-  useEffect(() => {
-    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
-  }, [collapsed]);
+  const [collapsed, setCollapsed] = usePersistentState(COLLAPSED_KEY, () => new Set<string>(), setCodec);
   const toggleCollapse = useStableCallback((id: string) =>
     setCollapsed((prev) => {
       const n = new Set(prev);
@@ -168,35 +149,19 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
 
   // ── Column widths (persisted) ──────────────────────────────────────────────
   const defaultWidths = Object.fromEntries(COLUMNS.map((c) => [c.key, c.defaultWidth]));
-  const [widths, setWidths] = useState<Record<string, number>>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(WIDTHS_KEY) || '{}');
-      return { ...defaultWidths, ...saved };
-    } catch {
-      return defaultWidths;
-    }
+  const [widths, setWidths] = usePersistentState<Record<string, number>>(WIDTHS_KEY, defaultWidths, {
+    parse: (raw) => ({ ...defaultWidths, ...JSON.parse(raw) }),
+    serialize: (v) => JSON.stringify(v),
   });
-  useEffect(() => {
-    localStorage.setItem(WIDTHS_KEY, JSON.stringify(widths));
-  }, [widths]);
 
   // ── Sidebar selection (which collection / view the table shows) ────────────
   // Declared early so the per-view config block below can derive its storage key.
-  const [selectedView, setSelectedView] = useState<string>(
-    () => localStorage.getItem(VIEW_KEY) || 'all'
-  );
-  useEffect(() => { localStorage.setItem(VIEW_KEY, selectedView); }, [selectedView]);
+  const [selectedView, setSelectedView] = usePersistentState(VIEW_KEY, 'all', stringCodec);
 
   // ── Per-view config (field order, visibility, filters, sorts) ────────────────
   // Keyed by workspaceId:viewId so each sidebar tab in each workspace has its own
   // independent layout and filter/sort state.
-  const [viewsConfig, setViewsConfig] = useState<Record<string, any>>(() => {
-    try { return JSON.parse(localStorage.getItem(VIEWS_KEY) || '{}'); }
-    catch { return {}; }
-  });
-  useEffect(() => {
-    localStorage.setItem(VIEWS_KEY, JSON.stringify(viewsConfig));
-  }, [viewsConfig]);
+  const [viewsConfig, setViewsConfig] = usePersistentState<Record<string, any>>(VIEWS_KEY, {});
 
   // The config key for the currently-visible view.
   const viewConfigKey = `${activeWorkspaceId}:${selectedView}`;
@@ -292,13 +257,29 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const [filterMenu, setFilterMenu] = useState<{ right: number; top: number } | null>(null);
   const [sortMenu, setSortMenu] = useState<{ right: number; top: number } | null>(null);
 
-  // Close all toolbar menus when the sidebar view changes.
-  useEffect(() => {
+  const closeToolbarMenus = () => {
     setSectionsMenu(null);
     setFieldsMenu(null);
     setFilterMenu(null);
     setSortMenu(null);
-  }, [selectedView]);
+  };
+
+  // Toggle a toolbar menu open below its button: close every menu first (so only
+  // one is ever open), then — unless this one was already open (toggle off) —
+  // anchor it to the button's bottom-right.
+  const toggleToolbarMenu = (
+    e: React.MouseEvent,
+    isOpen: boolean,
+    setter: (v: { right: number; top: number } | null) => void
+  ) => {
+    closeToolbarMenus();
+    if (isOpen) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setter({ right: window.innerWidth - r.right, top: r.bottom + 6 });
+  };
+
+  // Close all toolbar menus when the sidebar view changes.
+  useEffect(() => { closeToolbarMenus(); }, [selectedView]);
 
   const gridTemplateColumns = visibleColumns.map((c) => `${widths[c.key]}px`).join(' ') + ' minmax(80px, 1fr)';
 
@@ -448,15 +429,18 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   };
 
   // ── Left-pane sizing (persisted) ───────────────────────────────────────────
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
-    return saved >= MIN_SIDEBAR_WIDTH && saved <= MAX_SIDEBAR_WIDTH ? saved : DEFAULT_SIDEBAR_WIDTH;
+  const [sidebarWidth, setSidebarWidth] = usePersistentState(SIDEBAR_WIDTH_KEY, DEFAULT_SIDEBAR_WIDTH, {
+    parse: (raw) => {
+      const n = Number(raw);
+      if (n >= MIN_SIDEBAR_WIDTH && n <= MAX_SIDEBAR_WIDTH) return n;
+      throw new Error('out of range');
+    },
+    serialize: (v) => String(v),
   });
-  useEffect(() => { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); }, [sidebarWidth]);
-  const [sidebarHidden, setSidebarHidden] = useState<boolean>(
-    () => localStorage.getItem(SIDEBAR_HIDDEN_KEY) === '1'
-  );
-  useEffect(() => { localStorage.setItem(SIDEBAR_HIDDEN_KEY, sidebarHidden ? '1' : '0'); }, [sidebarHidden]);
+  const [sidebarHidden, setSidebarHidden] = usePersistentState(SIDEBAR_HIDDEN_KEY, false, {
+    parse: (raw) => raw === '1',
+    serialize: (v) => (v ? '1' : '0'),
+  });
 
   const startSidebarResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -536,16 +520,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   }, [selectedCollectionId, collections]);
 
   // ── Sidebar collection tree (nested, expand/collapse) ──────────────────────
-  const [collapsedColls, setCollapsedColls] = useState<Set<string>>(() => {
-    try {
-      return new Set<string>(JSON.parse(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) || '[]'));
-    } catch {
-      return new Set<string>();
-    }
-  });
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify([...collapsedColls]));
-  }, [collapsedColls]);
+  const [collapsedColls, setCollapsedColls] = usePersistentState(SIDEBAR_COLLAPSED_KEY, () => new Set<string>(), setCodec);
   const toggleCollColl = (id: string) =>
     setCollapsedColls((prev) => {
       const n = new Set(prev);
@@ -740,8 +715,25 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const uncategorizedCount = entries.filter(
     (e) => !e.todo.isCollection && !hasCollectionAncestor(e)
   ).length;
-  const collectionCount = (cid: string) =>
-    entries.filter((e) => !e.todo.isCollection && isDescendantOf(e, cid)).length;
+  // Task-descendant count per collection (every non-collection descendant,
+  // ignoring filters), precomputed in one ancestor walk instead of re-filtering
+  // all entries for each sidebar row.
+  const collectionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of entries) {
+      if (e.todo.isCollection) continue;
+      let p: string | null = e.todo.parentId ?? null;
+      const seen = new Set<string>();
+      while (p && byId.has(p) && !seen.has(p)) {
+        seen.add(p);
+        const pe = byId.get(p)!;
+        if (pe.todo.isCollection) counts.set(p, (counts.get(p) ?? 0) + 1);
+        p = pe.todo.parentId ?? null;
+      }
+    }
+    return counts;
+  }, [entries, byId]);
+  const collectionCount = (cid: string) => collectionCounts.get(cid) ?? 0;
 
   const currentCount = selectedCollectionId
     ? collectionCount(selectedCollectionId)
@@ -782,6 +774,37 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     setCollapsed((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
     setEditing({ id, col: 'title', rect: null });
   });
+  // The "+" on an attribute-grouped section header: create a task seeded with the
+  // section's attribute (so it lands in that section), expand the section if it
+  // was collapsed, and drop into the new row's title field.
+  const handleQuickAddInGroup = useStableCallback((groupValue: string) => {
+    const { date, patch } = groupCreateSpec(sectionsConfig.groupBy, groupValue);
+    const id = onAddTodo({ date, patch });
+    const headerId = `__grp:${sectionsConfig.groupBy}:${groupValue}`;
+    setCollapsed((prev) => { const n = new Set(prev); n.delete(headerId); return n; });
+    setEditing({ id, col: 'title', rect: null });
+  });
+
+  // Context-menu "Create task inside": add a subtask, expand the parent so the
+  // new row is visible, close the menu, and drop into its title field.
+  const createTaskInside = (parentId: string) => {
+    const id = onAddSubtask(parentId);
+    setCollapsed((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
+    closeMenu();
+    setEditing({ id, col: 'title', rect: null });
+  };
+
+  // Context-menu Delete: a non-empty collection prompts cascade-vs-promote;
+  // empty collections and plain tasks delete straight away.
+  const requestDeleteFromMenu = (id: string) => {
+    const entry = byId.get(id);
+    if (entry?.todo.isCollection && entries.some((e) => (e.todo.parentId ?? null) === id)) {
+      setDeleteCollId(id);
+    } else {
+      onDeleteTodo(id);
+    }
+    closeMenu();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1304,12 +1327,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             {/* Sections */}
             <button
               type="button"
-              onClick={(e) => {
-                if (sectionsMenu) { setSectionsMenu(null); return; }
-                setFieldsMenu(null); setFilterMenu(null); setSortMenu(null);
-                const r = e.currentTarget.getBoundingClientRect();
-                setSectionsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
-              }}
+              onClick={(e) => toggleToolbarMenu(e, !!sectionsMenu, setSectionsMenu)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
                 sectionsMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
               }`}
@@ -1320,12 +1338,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             {/* Fields */}
             <button
               type="button"
-              onClick={(e) => {
-                if (fieldsMenu) { setFieldsMenu(null); return; }
-                setFilterMenu(null); setSortMenu(null);
-                const r = e.currentTarget.getBoundingClientRect();
-                setFieldsMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
-              }}
+              onClick={(e) => toggleToolbarMenu(e, !!fieldsMenu, setFieldsMenu)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
                 fieldsMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
               }`}
@@ -1336,12 +1349,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             {/* Filter */}
             <button
               type="button"
-              onClick={(e) => {
-                if (filterMenu) { setFilterMenu(null); return; }
-                setFieldsMenu(null); setSortMenu(null);
-                const r = e.currentTarget.getBoundingClientRect();
-                setFilterMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
-              }}
+              onClick={(e) => toggleToolbarMenu(e, !!filterMenu, setFilterMenu)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
                 filterMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
               }`}
@@ -1357,12 +1365,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             {/* Sort */}
             <button
               type="button"
-              onClick={(e) => {
-                if (sortMenu) { setSortMenu(null); return; }
-                setFieldsMenu(null); setFilterMenu(null);
-                const r = e.currentTarget.getBoundingClientRect();
-                setSortMenu({ right: window.innerWidth - r.right, top: r.bottom + 6 });
-              }}
+              onClick={(e) => toggleToolbarMenu(e, !!sortMenu, setSortMenu)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[13px] transition-colors ${
                 sortMenu ? 'bg-white/10 text-white' : 'text-white/45 hover:text-white hover:bg-white/5'
               }`}
@@ -1386,7 +1389,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
           // commits the current indicator. Row/header onDrop call stopPropagation
           // so this never double-fires.
           onDrop={(e) => { e.preventDefault(); onRowDrop(); }}
-          className="flex-1 min-w-0 overflow-auto border-t border-white/10 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full ml-4 pr-4"
+          className="flex-1 min-w-0 overflow-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full ml-4 pr-4"
         >
         
         {/* Header row — full-bleed bar: its background + bottom border span the
@@ -1394,7 +1397,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
             padding and w-max width as the rows below, so the padding sits outside
             the grid tracks and the column borders line up with the body. */}
           <div
-            className="grid sticky top-0 z-30 w-max min-w-full bg-[#0a0a0a] border-b border-white/10 h-9"
+            className="grid sticky top-0 z-30 w-max min-w-full bg-[#0a0a0a] border-y border-white/10 h-9"
             style={{ gridTemplateColumns, paddingLeft: TABLE_PAD, paddingRight: TABLE_PAD }}
           >
             {visibleColumns.map((c, idx) => (
@@ -1462,6 +1465,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
                   row={row}
                   gridTemplateColumns={gridTemplateColumns}
                   onToggleCollapse={toggleCollapse}
+                  onAddTask={handleQuickAddInGroup}
                   isDropTarget={rowDrop?.id === row.id}
                   onHeaderDragOver={(e) => onHeaderDragOver(row.id, row.value, e)}
                   onHeaderDrop={onRowDrop}
@@ -1575,228 +1579,42 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         document.body
       )}
 
-      {/* Tags / Notes popover editor (portal, escapes the scroll container) */}
-      {editing && editingEntry && editing.rect && createPortal(
-        <>
-          <div
-            ref={popoverRef}
-            style={{
-              position: 'fixed',
-              left: popoverPos?.left ?? editing.rect.left,
-              top: popoverPos?.top ?? editing.rect.bottom + 4,
-              width: editing.col === 'date' || editing.col === 'start' || editing.col === 'end'
-                ? 240
-                : Math.max(editing.rect.width, editing.col === 'status' || editing.col === 'priority' ? 180 : 260),
-            }}
-            className={
-              editing.col === 'date' || editing.col === 'start' || editing.col === 'end'
-                ? 'z-[58] shadow-2xl'
-                : 'z-[58] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-2'
-            }
-          >
-            {editing.col === 'status' || editing.col === 'priority' ? (
-              <OptionSelectField
-                options={editing.col === 'status' ? STATUS_OPTIONS : PRIORITY_OPTIONS}
-                value={editing.col === 'status' ? editingEntry.todo.status : editingEntry.todo.priority}
-                onChange={(val) => {
-                  onSaveTodo(editingEntry.date, editingEntry.date, {
-                    ...editingEntry.todo,
-                    [editing.col]: val || undefined,
-                    // Status drives the checkbox: Completed ⇒ checked, anything else ⇒ unchecked.
-                    ...(editing.col === 'status' ? { completed: val === 'completed' } : {}),
-                  });
-                  stopEdit();
-                }}
-              />
-            ) : editing.col === 'collection' ? (
-              <CollectionSearchField
-                value={collectionOf(editingEntry.todo, todoById)}
-                currentPath={collPathFor(editingEntry.todo)}
-                options={collectionOptions}
-                onChange={(id) => { onSetTaskCollection(editingEntry.todo.id, id); stopEdit(); }}
-                onCreate={onCreateCollection}
-                autoFocus
-              />
-            ) : editing.col === 'date' ? (
-              <CalendarInput
-                value={editingEntry.date || ''}
-                autoFocus
-                showInDailyList={editingEntry.todo.showInDailyList ?? false}
-                onShowInDailyListChange={(val) => {
-                  onSaveTodo(editingEntry.date, editingEntry.date, {
-                    ...editingEntry.todo,
-                    showInDailyList: val,
-                  });
-                }}
-                onChange={(val) => {
-                  const updatedTodo = !val
-                    ? { ...editingEntry.todo, showInDailyList: false }
-                    : editingEntry.todo;
-                  onSaveTodo(editingEntry.date, val || null, updatedTodo);
-                }}
-              />
-            ) : editing.col === 'start' ? (
-              <TimeInput
-                value={editingEntry.todo.startTime}
-                autoFocus
-                onChange={(val) =>
-                  onSaveTodo(editingEntry.date, editingEntry.date, {
-                    ...editingEntry.todo,
-                    startTime: val || undefined,
-                  })
-                }
-              />
-            ) : editing.col === 'end' ? (
-              <TimeInput
-                value={editingEntry.todo.dueTime}
-                autoFocus
-                onChange={(val) => {
-                  // Keep duePercentage in sync with the end time (mirrors EndTimeField).
-                  const p = timeToPercentage(val);
-                  onSaveTodo(editingEntry.date, editingEntry.date, {
-                    ...editingEntry.todo,
-                    dueTime: val || undefined,
-                    ...(p !== undefined ? { duePercentage: p } : {}),
-                  });
-                }}
-              />
-            ) : (
-              <NotesField
-                value={editingEntry.todo.notes || ''}
-                autoFocus
-                minHeight={60}
-                maxHeight={220}
-                onChange={(val) =>
-                  onSaveTodo(editingEntry.date, editingEntry.date, {
-                    ...editingEntry.todo,
-                    notes: val || undefined,
-                  })
-                }
-                className="w-full bg-transparent text-sm text-white/90 placeholder:text-white/25 focus:outline-none resize-none leading-relaxed [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full"
-              />
-            )}
-          </div>
-        </>,
-        document.body
+      {/* Inline-cell editor popover (portal, escapes the scroll container) */}
+      {editing && editingEntry && editing.rect && (
+        <CellEditorPopover
+          editing={editing}
+          entry={editingEntry}
+          popoverRef={popoverRef}
+          popoverPos={popoverPos}
+          collectionOptions={collectionOptions}
+          todoById={todoById}
+          collPathFor={collPathFor}
+          onSaveTodo={onSaveTodo}
+          onSetTaskCollection={onSetTaskCollection}
+          onCreateCollection={onCreateCollection}
+          onClose={stopEdit}
+        />
       )}
 
       {/* Right-click / 3-dot context menu */}
-      {menu && createPortal(
-        <>
-          <div
-            className="fixed inset-0 z-[65]"
-            onMouseDown={closeMenu}
-            onContextMenu={(e) => { e.preventDefault(); closeMenu(); }}
-          />
-          <div
-            ref={menuRef}
-            style={{ position: 'fixed', left: menuPos?.left ?? menu.x, top: menuPos?.top ?? menu.y }}
-            className="z-[66] min-w-[170px] rounded-lg border border-white/10 bg-[#1f1f1f] shadow-2xl p-1 text-sm"
-          >
-            {menuEntry?.todo.isCollection ? (
-              <>
-                <button
-                  onClick={() => { setEditCollId(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <Pencil size={14} /> Edit
-                </button>
-                <button
-                  onClick={() => {
-                    const id = onAddSubtask(menu.id);
-                    setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
-                    closeMenu();
-                    setEditing({ id, col: 'title', rect: null });
-                  }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <CornerDownRight size={14} /> Create task inside
-                </button>
-                <button
-                  onClick={() => { handleNewNestedCollection(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <FolderPlus size={14} /> Create nested collection
-                </button>
-                <button
-                  onClick={() => setColorPickerOpen((v) => !v)}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <Palette size={14} /> Change color
-                </button>
-                {colorPickerOpen && (
-                  <div className="grid grid-cols-4 gap-1.5 px-2.5 py-2">
-                    {COLLECTION_COLORS.map((color) => {
-                      const selected = (menuEntry.todo.color || DEFAULT_COLLECTION_COLOR) === color;
-                      return (
-                        <button
-                          key={color}
-                          title={color}
-                          onClick={() => { setCollectionColor(menuEntry, color); closeMenu(); }}
-                          className={`h-6 w-6 rounded-full transition-transform hover:scale-110 ${
-                            selected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1f1f1f]' : 'ring-1 ring-white/15'
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => { setFullViewId(menu.id); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <Maximize2 size={14} /> Expand
-                </button>
-                <button
-                  onClick={() => {
-                    const id = onAddSubtask(menu.id);
-                    setCollapsed((prev) => { const n = new Set(prev); n.delete(menu.id); return n; });
-                    closeMenu();
-                    setEditing({ id, col: 'title', rect: null });
-                  }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <CornerDownRight size={14} /> Create task inside
-                </button>
-                <button
-                  onClick={() => { if (menuEntry) makeCollection(menuEntry); closeMenu(); }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-                >
-                  <FolderPlus size={14} /> Create collection
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => { onArchiveTodo(menu.id); closeMenu(); }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-            >
-              <Archive size={14} /> Archive
-            </button>
-            <button
-              onClick={() => {
-                // For a non-empty collection, ask whether to cascade or promote;
-                // empty collections (and plain tasks) just delete straight away.
-                if (
-                  menuEntry?.todo.isCollection &&
-                  entries.some((e) => (e.todo.parentId ?? null) === menu.id)
-                ) {
-                  setDeleteCollId(menu.id);
-                } else {
-                  onDeleteTodo(menu.id);
-                }
-                closeMenu();
-              }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left text-red-400 hover:bg-[#d93d42]/10 hover:text-red-300 transition-colors"
-            >
-              <Trash2 size={14} /> Delete
-            </button>
-          </div>
-        </>,
-        document.body
+      {menu && (
+        <RowContextMenu
+          menu={menu}
+          menuPos={menuPos}
+          menuRef={menuRef}
+          entry={menuEntry}
+          colorPickerOpen={colorPickerOpen}
+          onToggleColorPicker={() => setColorPickerOpen((v) => !v)}
+          onClose={closeMenu}
+          onEditCollection={(id) => { setEditCollId(id); closeMenu(); }}
+          onCreateTaskInside={createTaskInside}
+          onCreateNestedCollection={(id) => { handleNewNestedCollection(id); closeMenu(); }}
+          onChangeColor={(entry, color) => { setCollectionColor(entry, color); closeMenu(); }}
+          onMakeCollection={(entry) => { makeCollection(entry); closeMenu(); }}
+          onExpand={(id) => { setFullViewId(id); closeMenu(); }}
+          onArchive={(id) => { onArchiveTodo(id); closeMenu(); }}
+          onDelete={requestDeleteFromMenu}
+        />
       )}
 
       {/* Edit-collection modal: rename, recolor, and re-parent */}
@@ -1824,61 +1642,14 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         const coll = entries.find((e) => e.todo.id === deleteCollId);
         if (!coll) { setDeleteCollId(null); return null; }
         const parentColl = coll.todo.parentId ? byId.get(coll.todo.parentId) : null;
-        const promoteTarget = parentColl?.todo.text || 'Uncategorized';
         return createPortal(
-          <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
-            onMouseDown={() => setDeleteCollId(null)}
-          >
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1c1c1c] p-5 shadow-2xl"
-            >
-              <h2 className="text-base font-bold text-white">
-                Delete “{coll.todo.text || 'Untitled collection'}”
-              </h2>
-              <p className="mt-1.5 text-sm text-white/55">
-                This collection contains tasks. What should happen to them?
-              </p>
-              <div className="mt-4 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => { onDeleteCollection(deleteCollId, 'promote'); setDeleteCollId(null); }}
-                  className="w-full flex items-start gap-3 rounded-xl border border-white/10 p-3 text-left hover:bg-white/5 transition-colors"
-                >
-                  <Inbox size={18} className="shrink-0 mt-0.5 text-[var(--accent2)]" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-white">Move tasks up one level</span>
-                    <span className="block text-xs text-white/50">
-                      Keep them — move into <span className="text-white/70 font-medium">{promoteTarget}</span> and delete only the collection.
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { onDeleteCollection(deleteCollId, 'cascade'); setDeleteCollId(null); }}
-                  className="w-full flex items-start gap-3 rounded-xl border border-red-500/20 p-3 text-left hover:bg-[#d93d42]/10 transition-colors"
-                >
-                  <Trash2 size={18} className="shrink-0 mt-0.5 text-red-400" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-red-300">Delete all tasks</span>
-                    <span className="block text-xs text-white/50">
-                      Permanently remove the collection and everything nested inside it.
-                    </span>
-                  </span>
-                </button>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setDeleteCollId(null)}
-                  className="px-3 py-1.5 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>,
+          <DeleteCollectionModal
+            name={coll.todo.text || 'Untitled collection'}
+            promoteTarget={parentColl?.todo.text || 'Uncategorized'}
+            onPromote={() => { onDeleteCollection(deleteCollId, 'promote'); setDeleteCollId(null); }}
+            onCascade={() => { onDeleteCollection(deleteCollId, 'cascade'); setDeleteCollId(null); }}
+            onClose={() => setDeleteCollId(null)}
+          />,
           document.body
         );
       })()}
