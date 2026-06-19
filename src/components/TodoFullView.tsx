@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Todo } from '../types';
 import { CollectionOption, collectionOf, collectionPath } from '../utils/todoFilters';
+import { isDone } from '../utils/todoStatus';
 import {
   CompletedToggle,
   DateField,
@@ -134,11 +135,9 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
 
   useEffect(() => {
     setDraft(prev =>
-      prev.completed === todo.completed && prev.status === todo.status
-        ? prev
-        : { ...prev, completed: todo.completed, status: todo.status }
+      prev.status === todo.status ? prev : { ...prev, status: todo.status }
     );
-  }, [todo.completed, todo.status]);
+  }, [todo.status]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -207,7 +206,7 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
           <div className="flex-1 flex flex-col overflow-y-auto min-w-0 px-8 py-6 no-scrollbar">
             <div className="flex items-start gap-3 mb-5">
               <CompletedToggle
-                completed={draft.completed}
+                completed={isDone(draft)}
                 onToggle={() => onToggle(draft.id)}
                 className="mt-1 shrink-0"
               />
@@ -219,7 +218,7 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
                 rows={1}
                 placeholder="Task name"
                 className={`flex-1 bg-transparent resize-none overflow-hidden text-xl font-bold focus:outline-none leading-snug pt-0.5 placeholder:text-white/20 ${
-                  draft.completed ? 'text-white/25 line-through' : 'text-white'
+                  isDone(draft) ? 'text-white/25 line-through' : 'text-white'
                 }`}
               />
             </div>
@@ -252,9 +251,7 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
                 <OptionSelectField
                   options={STATUS_OPTIONS}
                   value={draft.status}
-                  onChange={(val) =>
-                    update({ status: val as Todo['status'], completed: val === 'completed' })
-                  }
+                  onChange={(val) => update({ status: val as Todo['status'] })}
                   variant="inline"
                 />
               </RightProp>

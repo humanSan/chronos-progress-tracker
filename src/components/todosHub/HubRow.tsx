@@ -14,6 +14,7 @@ import {
 } from '../todoFields';
 import { ColDef, ColKey, EditState, FlatNode, NAME_COL_KEY } from './types';
 import { INDENT, NAME_BASE_PAD, DEFAULT_COLLECTION_COLOR, pillTextColor, cellEditCls } from './constants';
+import { isDone } from '../../utils/todoStatus';
 
 // Where the dragged row will land relative to this row: a line before/after it
 // (reorder) or nested inside it. `depth` is the indent level to draw the line at.
@@ -37,7 +38,7 @@ interface HubRowProps {
   // Ordered, visible columns (Name first) — drives which cells render and in what order.
   columns: ColDef[];
   lastColKey: ColKey; // the rightmost visible column, which gets a right divider
-  // When true the drag handle is hidden (e.g. in grouped mode where DnD has no effect).
+  // When true the drag handle is hidden (drag-and-drop disabled for this row).
   hideDragHandle?: boolean;
   // Visible (post-filter) task count shown on collection header rows.
   taskCount?: number;
@@ -335,7 +336,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
               col === lastColKey ? 'border-r border-white/8' : ''
             }`}
           >
-            <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} />
+            <CompletedToggle completed={isDone(todo)} onToggle={() => onToggleTodo(todo.id)} size={16} />
           </div>
         );
       case 'startPercent':
@@ -461,7 +462,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
 
           {dragHandle()}
 
-          <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={18} className='mr-1 ml-1'/>
+          <CompletedToggle completed={isDone(todo)} onToggle={() => onToggleTodo(todo.id)} size={18} className='mr-1 ml-1'/>
 
           {isEditing('title') ? (
             <input
@@ -478,7 +479,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
             <>
               <span
                 onClick={(e) => startEdit(todo.id, 'title', e)}
-                className={`flex-1 h-full content-center truncate pl-1 text-sm cursor-text ${todo.completed ? 'text-white/45 line-through' : 'text-white'}`}
+                className={`flex-1 h-full content-center truncate pl-1 text-sm cursor-text ${isDone(todo) ? 'text-white/45 line-through' : 'text-white'}`}
               >
                 {todo.text || <span className="text-white/40">Untitled</span>}
               </span>

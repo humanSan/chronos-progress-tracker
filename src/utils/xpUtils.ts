@@ -6,6 +6,7 @@ import {
 } from 'date-fns';
 import { DayTodos } from '../types';
 import { hasDate } from './todoFilters';
+import { isDone } from './todoStatus';
 
 export interface XpStats {
   earned: number;             // XP from completed todos on the given date
@@ -31,7 +32,7 @@ export function getEarnedXp(dayTodos: DayTodos[], date: string): number {
   const day = dayTodos.find(d => d.date === date);
   if (!day) return 0;
   return (day.todos || []).reduce(
-    (sum, t) => sum + (t && t.completed && t.xp ? t.xp : 0),
+    (sum, t) => sum + (t && isDone(t) && t.xp ? t.xp : 0),
     0
   );
 }
@@ -65,7 +66,7 @@ export function computeXpStats(
     let e = 0, p = 0;
     for (const t of day.todos || []) {
       if (t?.xp) p += t.xp;
-      if (t?.completed && t?.xp) e += t.xp;
+      if (t && isDone(t) && t.xp) e += t.xp;
     }
     earnedByDate.set(day.date, e);
     potentialByDate.set(day.date, p);
@@ -134,7 +135,7 @@ export function getWeeklyXp(dayTodos: DayTodos[], weeks: number): number[] {
   for (const day of dayTodos) {
     let e = 0;
     for (const t of day.todos || []) {
-      if (t?.completed && t?.xp) e += t.xp;
+      if (t && isDone(t) && t.xp) e += t.xp;
     }
     earnedByDate.set(day.date, e);
   }
@@ -179,7 +180,7 @@ export function computeStarStreak(dayTodos: DayTodos[], date: string): StarStrea
     let e = 0;
     let c = 0;
     for (const t of day.todos || []) {
-      if (t && t.completed) {
+      if (t && isDone(t)) {
         c++;
         if (t.xp) e += t.xp;
       }

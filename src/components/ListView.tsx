@@ -33,6 +33,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Todo } from '../types';
 import { CollectionOption } from '../utils/todoFilters';
+import { isDone } from '../utils/todoStatus';
 import { formatTime12h } from '../utils/timeUtils';
 import { QuickEditTodo, QuickEditValues } from './QuickEditTodo';
 
@@ -202,17 +203,17 @@ const TodoItem: React.FC<TodoItemProps> = ({
         className="relative cursor-pointer py-1"
       >
         <motion.div
-          animate={todo.completed ? { scale: [1.3, 1], rotate: [15, 0] } : {}}
+          animate={isDone(todo) ? { scale: [1.3, 1], rotate: [15, 0] } : {}}
           transition={{ duration: 0.3 }}
-          className={`transition-colors duration-100 ${todo.completed ? 'text-(--accent1)' : 'text-white/50 hover:text-white'}`}
+          className={`transition-colors duration-100 ${isDone(todo) ? 'text-(--accent1)' : 'text-white/50 hover:text-white'}`}
         >
-          {todo.completed ? <CheckCircleCutout size={21} strokeWidth={2.5} /> : <Circle size={21} strokeWidth={2.5} />}
+          {isDone(todo) ? <CheckCircleCutout size={21} strokeWidth={2.5} /> : <Circle size={21} strokeWidth={2.5} />}
         </motion.div>
       </button>
 
       <div className="flex items-center gap-1.5 min-w-0">
         <div className="min-w-0 cursor-default group/text" onClick={() => onEdit(todo)}>
-          <p className={`text-md transition duration-200 ease-out font-medium truncate ${todo.completed
+          <p className={`text-md transition duration-200 ease-out font-medium truncate ${isDone(todo)
             ? 'text-white/25 line-through translate-x-[3px]'
             : 'text-white group-hover/text:text-(--accent2)'
           }`}>
@@ -243,7 +244,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
 
       <div className="flex items-center gap-2">
         {todo.xp !== undefined && (
-          <div className={`flex items-center justify-center gap-1.5 px-2.75 py-[5.5px] rounded-lg text-[13px] leading-none font-mono font-medium ${todo.completed
+          <div className={`flex items-center justify-center gap-1.5 px-2.75 py-[5.5px] rounded-lg text-[13px] leading-none font-mono font-medium ${isDone(todo)
             ? 'bg-white/5 text-white/20'
             : 'bg-[#ffba44]/6 text-[#ffba44]'
           }`}>
@@ -255,14 +256,14 @@ const TodoItem: React.FC<TodoItemProps> = ({
         {(todo.dueTime || todo.duePercentage !== undefined) && (
           <div
             onClick={() => onStartTracking(todo.id)}
-            className={`flex items-center justify-center gap-2 px-2.75 cursor-pointer py-[5.5px] rounded-lg transition ${todo.completed
+            className={`flex items-center justify-center gap-2 px-2.75 cursor-pointer py-[5.5px] rounded-lg transition ${isDone(todo)
               ? 'bg-white/5 shadow-none'
               : isActive
                 ? 'bg-[var(--accent1)] shadow-lg shadow-[var(--accent1)]/10'
                 : 'bg-[var(--accent1)]/6 shadow-none hover:bg-[var(--accent1)]/15'
             }`}>
             {todo.dueTime && (
-              <div className={`flex items-center justify-center gap-1.5 text-[13px] leading-none font-mono font-medium transition-colors duration-500 ${todo.completed
+              <div className={`flex items-center justify-center gap-1.5 text-[13px] leading-none font-mono font-medium transition-colors duration-500 ${isDone(todo)
                 ? 'text-white/20'
                 : isActive
                   ? 'text-black'
@@ -273,7 +274,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
               </div>
             )}
             {todo.dueTime && todo.duePercentage !== undefined && (
-              <div className={`w-px h-4 transition-colors duration-500 ${todo.completed
+              <div className={`w-px h-4 transition-colors duration-500 ${isDone(todo)
                 ? 'bg-white/10'
                 : isActive
                   ? 'bg-black/20'
@@ -281,7 +282,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
               }`} />
             )}
             {todo.duePercentage !== undefined && (
-              <div className={`text-[13px] leading-none font-mono font-medium transition-colors duration-500 ${todo.completed
+              <div className={`text-[13px] leading-none font-mono font-medium transition-colors duration-500 ${isDone(todo)
                 ? 'text-white/20'
                 : isActive
                   ? 'text-black'
@@ -293,7 +294,7 @@ const TodoItem: React.FC<TodoItemProps> = ({
           </div>
         )}
 
-        {countdownDisplay && !todo.completed && (
+        {countdownDisplay && !isDone(todo) && (
           <div className={`flex items-center gap-2 px-2.75 h-[27px] rounded-lg transition-colors duration-500 ${isActive ? 'bg-[#d93d42] text-white' : 'bg-white/5 text-[#D93D42]'}`}>
             <div className="text-[13px] leading-none font-mono font-medium">
               <span className="relative top-px"> {countdownDisplay} </span>

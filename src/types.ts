@@ -36,8 +36,9 @@ export interface Workspace {
 export interface Todo {
   id: string;
   text: string;       // Todo name
-  completed: boolean;
-  status?: TodoStatus;     // Workflow state (Task Planner). Rendered as a solid pill.
+  status?: TodoStatus;     // Workflow state + completion. Optional/clearable; only
+                           // 'completed' counts as done (see isDone in
+                           // utils/todoStatus.ts). Rendered as a solid pill.
   priority?: TodoPriority; // Importance (Task Planner). Rendered as a solid pill.
   urgency?: TodoUrgency;   // How soon it needs to be done.
   startDate?: string;      // YYYY-MM-DD start date

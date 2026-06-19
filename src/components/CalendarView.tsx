@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Todo, DayTodos } from '../types';
 import { timeToPercentage, formatTime12h } from '../utils/timeUtils';
+import { isDone, toggledStatus } from '../utils/todoStatus';
 import { Calendar } from './Calendar';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -107,7 +108,7 @@ const EventCard: React.FC<{
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`absolute left-1 right-1 rounded-md px-2 overflow-hidden cursor-auto transition-opacity flex flex-col ${isSmall ? 'justify-center' : 'justify-start'
-        } ${todo.completed ? 'opacity-40' : 'opacity-100'
+        } ${isDone(todo) ? 'opacity-40' : 'opacity-100'
         } ${isDragging ? 'z-50 ring-1 ring-[var(--accent1)]' : 'z-10 ring-1 ring-neutral-950'}
       `}
       style={{
@@ -115,12 +116,12 @@ const EventCard: React.FC<{
         height: `${height}px`,
         paddingTop: isSmall ? '0' : '5px',
         // paddingBottom: isSmall ? '0' : '3.5px',
-        backgroundColor: todo.completed
+        backgroundColor: isDone(todo)
           ? ((isHovered || isDragging) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)')
           : ((isHovered || isDragging)
             ? 'color-mix(in srgb, var(--accent1) 40%, black 60%)'
             : 'color-mix(in srgb, var(--accent1) 30%, black 70%)'),
-        // border: todo.completed
+        // border: isDone(todo)
         //   ? '1px solid rgba(255,255,255,0.05)'
         //   : '1px solid color-mix(in srgb, var(--accent1), transparent 70%)',
       }}
@@ -145,41 +146,41 @@ const EventCard: React.FC<{
                 animate={{ scale: 0.8, opacity: 1 }}
                 className={'text-[var(--accent1)]'}
               >
-                {todo.completed ? <CheckCircle2 size={15} strokeWidth={2.5} /> : <Circle size={15} strokeWidth={2.5} />}
+                {isDone(todo) ? <CheckCircle2 size={15} strokeWidth={2.5} /> : <Circle size={15} strokeWidth={2.5} />}
               </motion.div>
             </div>
           ) : (
             <div
-              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${todo.completed ? 'bg-white/20' : 'bg-[var(--accent1)]'
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDone(todo) ? 'bg-white/20' : 'bg-[var(--accent1)]'
                 }`}
             />
           )}
         </div>
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-          <span className={`text-[12px] font-semibold ${height < 50 ? 'truncate' : ''} ${todo.completed ? 'text-white/30 line-through' : 'text-white'
+          <span className={`text-[12px] font-semibold ${height < 50 ? 'truncate' : ''} ${isDone(todo) ? 'text-white/30 line-through' : 'text-white'
             }`}>
             {todo.text}
           </span>
           {isSmall && (
-            <span className={`text-[10px] truncate text-clip ${todo.completed ? 'text-white/15' : 'text-white/70'}`}>
+            <span className={`text-[10px] truncate text-clip ${isDone(todo) ? 'text-white/15' : 'text-white/70'}`}>
               {fullTimeDisplay}
             </span>
           )}
         </div>
       </div>
       {!isSmall && (
-        <div className={`text-[10px] truncate pl-4 ${todo.completed ? 'text-white/15' : 'text-white/70'
+        <div className={`text-[10px] truncate pl-4 ${isDone(todo) ? 'text-white/15' : 'text-white/70'
           }`}>
           {timeRange}
           {' '}
           {durationStr}
         </div>
       )}
-      {!todo.completed && (
+      {!isDone(todo) && (
         <div className="absolute top-0 left-0 w-1 h-full bg-[var(--accent1)]" />
       )}
       {/* Resize handles */}
-      {!todo.completed && onResizeStart && (
+      {!isDone(todo) && onResizeStart && (
         <>
           <div
             className="absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-20 border-transparent"
@@ -265,7 +266,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const dayData = dayTodos.find(d => d.date === dateStr);
     if (!dayData) return;
     const newTodos = (dayData.todos || []).map(t =>
-      t && t.id === todoId ? { ...t, completed: !t.completed } : t
+      t && t.id === todoId ? { ...t, status: toggledStatus(t) } : t
     );
     onUpdateTodos(dateStr, newTodos);
   }, [dayTodos, onUpdateTodos]);
@@ -662,7 +663,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const newTodo: Todo = {
       id: Math.random().toString(36).substr(2, 9),
       text: newTaskText.trim(),
-      completed: false,
+      status: 'todo',
       startTime,
       dueTime,
       duePercentage: timeToPercentage(dueTime),

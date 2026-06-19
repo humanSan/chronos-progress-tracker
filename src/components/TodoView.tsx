@@ -97,7 +97,6 @@ export const TodoView: React.FC<TodoViewProps> = ({
     const newTodo: Todo = {
       id: Math.random().toString(36).substr(2, 9),
       text: vals.text,
-      completed: false,
       showInDailyList: true,
       notes: vals.notes || undefined,
       startTime: vals.startTime,

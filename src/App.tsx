@@ -10,6 +10,7 @@ import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
 import { TodosHubView } from './components/TodosHubView';
 import { UNDATED, todoIndex, collectionOptions } from './utils/todoFilters';
+import { normalizeCompletion, toggledStatus } from './utils/todoStatus';
 import { CalendarView } from './components/CalendarView';
 import { StatsView } from './components/StatsView';
 import { ActiveTodoTracker } from './components/ActiveTodoTracker';
@@ -290,7 +291,7 @@ export default function App() {
     const dueDate = date && date !== UNDATED ? date : undefined;
     setTodos(prev => {
       const others = prev.filter(t => t && bucketKeyOf(t) !== date);
-      const normalized = todosForDate.map(t => ({ ...t, dueDate }));
+      const normalized = todosForDate.map(t => normalizeCompletion({ ...t, dueDate }));
       const updated = [...others, ...normalized];
       if (activeTodoId && !updated.some(t => t && t.id === activeTodoId)) setActiveTodoId(null);
       return updated;
@@ -301,19 +302,15 @@ export default function App() {
   // needed — the date lives on the task now.
   const handleMoveTodo = (_fromDate: string, toDate: string, updatedTodo: Todo) => {
     const dueDate = toDate && toDate !== UNDATED ? toDate : undefined;
-    setTodos(prev => prev.map(t => (t && t.id === updatedTodo.id ? { ...updatedTodo, dueDate } : t)));
+    setTodos(prev => prev.map(t => (t && t.id === updatedTodo.id ? normalizeCompletion({ ...updatedTodo, dueDate }) : t)));
   };
 
   const handleToggleTodo = (todoId: string) => {
     setTodos(prev => prev.map(todo => {
       if (!todo || todo.id !== todoId) return todo;
-      const completed = !todo.completed;
-      // Keep the workflow status in sync with the checkbox: checking marks the
-      // task Completed; unchecking a Completed task drops it back to Todo.
-      let status = todo.status;
-      if (completed) status = 'completed';
-      else if (todo.status === 'completed') status = 'todo';
-      return { ...todo, completed, status, completedAt: completed ? Date.now() : undefined };
+      // Status is the source of truth: the checkbox flips it between completed and
+      // todo; normalizeCompletion keeps completedAt in step.
+      return normalizeCompletion({ ...todo, status: toggledStatus(todo) });
     }));
 
     // If we're toggling the active todo, close the tracker
@@ -348,7 +345,8 @@ export default function App() {
   // so callers can just set `dueDate` without worrying about the sentinel.
   const handleHubSaveTodo = (updatedTodo: Todo) => {
     const dueDate = updatedTodo.dueDate && updatedTodo.dueDate !== UNDATED ? updatedTodo.dueDate : undefined;
-    setTodos(prev => prev.map(t => (t && t.id === updatedTodo.id ? { ...updatedTodo, dueDate } : t)));
+    const normalized = normalizeCompletion({ ...updatedTodo, dueDate });
+    setTodos(prev => prev.map(t => (t && t.id === normalized.id ? normalized : t)));
   };
 
   // Create a fresh database todo at the bottom of the hub. An optional parentId
@@ -365,7 +363,6 @@ export default function App() {
     const newTodo: Todo = {
       id,
       text: '',
-      completed: false,
       showInDatabase: true,
       showInDailyList: false,
       workspaceId: activeWorkspaceId,
@@ -396,7 +393,6 @@ export default function App() {
     const newCollection: Todo = {
       id,
       text: name,
-      completed: false,
       showInDatabase: true,
       isCollection: true,
       color: '#9ca3af',
