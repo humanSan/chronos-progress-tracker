@@ -1,7 +1,7 @@
 import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { OrganizerEntry, collectionOf, collectionPath } from '../../utils/todoFilters';
 import { Todo, TodoStatus, TodoPriority } from '../../types';
-import { formatTime12h } from '../../utils/timeUtils';
+import { formatTime12h, formatMinutes } from '../../utils/timeUtils';
 import { STATUS_OPTIONS, PRIORITY_OPTIONS, statusOption, priorityOption } from '../todoFields';
 import { ColKey, FilterRule, FlatNode, GroupRow } from './types';
 
@@ -34,6 +34,17 @@ export function getFieldDisplayValue(
     }
     case 'xp': return todo.xp !== undefined ? String(todo.xp) : '';
     case 'notes': return todo.notes || '';
+    case 'completed': return todo.completed ? 'Done' : 'Not done';
+    case 'startPercent': return todo.startPercentage !== undefined ? `${todo.startPercentage}%` : '';
+    case 'estimatedTime': return todo.estimatedTime !== undefined ? formatMinutes(todo.estimatedTime) : '';
+    case 'createdAt': {
+      try { return format(new Date(todo.createdAt), 'MMM d, yyyy'); }
+      catch { return ''; }
+    }
+    case 'completedAt': {
+      try { return todo.completedAt ? format(new Date(todo.completedAt), 'MMM d, yyyy') : ''; }
+      catch { return ''; }
+    }
     default: return '';
   }
 }
@@ -53,6 +64,10 @@ export function getFieldRawValue(
     case 'end': return todo.dueTime || '';
     case 'percent': return todo.duePercentage !== undefined ? String(todo.duePercentage) : '';
     case 'xp': return todo.xp !== undefined ? String(todo.xp) : '';
+    case 'startPercent': return todo.startPercentage !== undefined ? String(todo.startPercentage) : '';
+    case 'estimatedTime': return todo.estimatedTime !== undefined ? String(todo.estimatedTime) : '';
+    case 'createdAt': return String(todo.createdAt);
+    case 'completedAt': return todo.completedAt !== undefined ? String(todo.completedAt) : '';
     default: return getFieldDisplayValue(entry, field, todoById);
   }
 }

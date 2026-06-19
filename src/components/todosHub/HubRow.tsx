@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { format, parseISO } from 'date-fns';
 import { GripVertical, MoreHorizontal, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { Todo } from '../../types';
-import { formatTime12h } from '../../utils/timeUtils';
+import { formatTime12h, percentageToTime, formatMinutes } from '../../utils/timeUtils';
 import {
   CompletedToggle,
   PercentField,
@@ -143,7 +143,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
   // accent ring that inline-edited cells get from `cellEditCls`; cells whose
   // editor lives in a popover (currently the date column) opt into it so the
   // cell visibly reflects that it's being edited.
-  const DisplayCell: React.FC<{ col: ColKey; children: React.ReactNode; active?: boolean }> = ({ col, children, active }) => (
+  const DisplayCell: React.FC<{ col: ColKey; children: React.ReactNode; active?: boolean }> = ({ col, children, active = isEditing(col) }) => (
     <div
       onClick={(e) => startEdit(todo.id, col, e)}
       className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden cursor-pointer hover:bg-white/3 ${
@@ -327,6 +327,100 @@ const HubRowImpl: React.FC<HubRowProps> = ({
           <DisplayCell col="notes">
             {todo.notes ? <span className="truncate text-sm text-white/90">{todo.notes}</span> : muted}
           </DisplayCell>
+        );
+      case 'completed':
+        return (
+          <div
+            className={`flex items-center justify-center h-full border-l border-white/8 ${
+              col === lastColKey ? 'border-r border-white/8' : ''
+            }`}
+          >
+            <CompletedToggle completed={todo.completed} onToggle={() => onToggleTodo(todo.id)} size={16} />
+          </div>
+        );
+      case 'startPercent':
+        return isEditing('startPercent') ? (
+          <div className={editCellWrap}>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              defaultValue={todo.startPercentage ?? ''}
+              autoFocus
+              onBlur={stopEdit}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') { saveField({ startPercentage: undefined }); return; }
+                const num = parseFloat(val);
+                if (!isNaN(num)) {
+                  const t = percentageToTime(num);
+                  saveField({ startPercentage: num, ...(t ? { startTime: t } : {}) });
+                }
+              }}
+              style={{ colorScheme: 'dark' }}
+              placeholder="e.g. 50"
+              className={cellEditCls}
+            />
+          </div>
+        ) : (
+          <DisplayCell col="startPercent">
+            <span className="truncate text-sm text-white/90">
+              {todo.startPercentage !== undefined ? `${todo.startPercentage}%` : muted}
+            </span>
+          </DisplayCell>
+        );
+      case 'estimatedTime':
+        return isEditing('estimatedTime') ? (
+          <div className={editCellWrap}>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={todo.estimatedTime ?? ''}
+              autoFocus
+              onBlur={stopEdit}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') { saveField({ estimatedTime: undefined }); return; }
+                const num = parseInt(val, 10);
+                if (!isNaN(num) && num >= 0) saveField({ estimatedTime: num });
+              }}
+              style={{ colorScheme: 'dark' }}
+              placeholder="min"
+              className={cellEditCls}
+            />
+          </div>
+        ) : (
+          <DisplayCell col="estimatedTime">
+            <span className="truncate text-sm text-white/90">
+              {todo.estimatedTime !== undefined ? formatMinutes(todo.estimatedTime) : muted}
+            </span>
+          </DisplayCell>
+        );
+      case 'createdAt':
+        return (
+          <div
+            className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden ${
+              col === lastColKey ? 'border-r border-white/8' : ''
+            }`}
+          >
+            <span className="truncate text-sm text-white/60">
+              {format(new Date(todo.createdAt), 'MMM d, yyyy')}
+            </span>
+          </div>
+        );
+      case 'completedAt':
+        return (
+          <div
+            className={`flex items-center h-full px-2.5 border-l border-white/8 overflow-hidden ${
+              col === lastColKey ? 'border-r border-white/8' : ''
+            }`}
+          >
+            <span className="truncate text-sm text-white/90">
+              {todo.completedAt ? format(new Date(todo.completedAt), 'MMM d, yyyy') : muted}
+            </span>
+          </div>
         );
       default:
         return null;
