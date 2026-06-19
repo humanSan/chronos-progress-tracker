@@ -45,7 +45,7 @@ export const CellEditorPopover: React.FC<{
 }) => {
   if (!editing.rect) return null;
   const { col } = editing;
-  const isDateOrTime = col === 'date' || col === 'start' || col === 'end';
+  const isDateOrTime = col === 'date' || col === 'startDate' || col === 'start' || col === 'end';
   const save = (patch: Partial<Todo>) => onSaveTodo(entry.date, entry.date, { ...entry.todo, ...patch });
 
   return createPortal(
@@ -99,6 +99,12 @@ export const CellEditorPopover: React.FC<{
               : entry.todo;
             onSaveTodo(entry.date, val || null, updatedTodo);
           }}
+        />
+      ) : col === 'startDate' ? (
+        <CalendarInput
+          value={entry.todo.startDate || ''}
+          autoFocus
+          onChange={(val) => save({ startDate: val || undefined })}
         />
       ) : col === 'start' ? (
         <TimeInput

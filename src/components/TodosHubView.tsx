@@ -231,7 +231,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   // (vs. a full-screen overlay) lets the click also land on another cell, so a single
   // click both closes this editor and opens the next one.
   const popoverRef = useRef<HTMLDivElement>(null);
-  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority', 'date', 'start', 'end'];
+  const POPOVER_COLS: ColKey[] = ['collection', 'notes', 'status', 'priority', 'startDate', 'date', 'start', 'end'];
   const popoverOpen = !!editing && POPOVER_COLS.includes(editing.col);
   useEffect(() => {
     if (!popoverOpen) return;
@@ -322,7 +322,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const menuEntry = menu ? entries.find((e) => e.todo.id === menu.id) || null : null;
 
   // Convert a plain task into a top-level collection: flag it, give it a default
-  // color, strip the task-only fields, and move it to the UNDATED bucket so it
+  // color, strip the task-only fields, and clear its due date (undated) so it
   // can never leak onto the daily checklist.
   const makeCollection = (entry: OrganizerEntry) => {
     onSaveTodo(entry.date, null, {

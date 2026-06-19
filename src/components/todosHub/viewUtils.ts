@@ -21,6 +21,10 @@ export function getFieldDisplayValue(
       try { return date ? format(parseISO(date), 'MMM d, yyyy') : ''; }
       catch { return date || ''; }
     }
+    case 'startDate': {
+      try { return todo.startDate ? format(parseISO(todo.startDate), 'MMM d, yyyy') : ''; }
+      catch { return todo.startDate || ''; }
+    }
     case 'start': return todo.startTime ? formatTime12h(todo.startTime) : '';
     case 'end': return todo.dueTime ? formatTime12h(todo.dueTime) : '';
     case 'percent': return todo.duePercentage !== undefined ? `${todo.duePercentage}%` : '';
@@ -44,6 +48,7 @@ export function getFieldRawValue(
   const { todo, date } = entry;
   switch (field) {
     case 'date': return date || '';
+    case 'startDate': return todo.startDate || '';
     case 'start': return todo.startTime || '';
     case 'end': return todo.dueTime || '';
     case 'percent': return todo.duePercentage !== undefined ? String(todo.duePercentage) : '';
