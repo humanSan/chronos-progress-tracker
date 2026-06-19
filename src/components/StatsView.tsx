@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { DayTodos, Todo } from '../types';
 import { hasDate, todoIndex, collectionOf, collectionPath } from '../utils/todoFilters';
+import { isDone } from '../utils/todoStatus';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface StatsViewProps {
@@ -99,7 +100,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
 
       (d.todos || []).forEach(t => {
         if (t) {
-          if (t.completed) {
+          if (isDone(t)) {
             compCount++;
             dailyXp += t.xp || 0;
             compList.push(t);
@@ -339,7 +340,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
     dayTodos.forEach(d => {
       if (!hasDate(d.date)) return; // skip the undated Task Planner bucket
       (d.todos || []).forEach(t => {
-        if (t && t.completed && t.xp) {
+        if (t && isDone(t) && t.xp) {
           const path = collsForTodo(t);
           const buckets = path.length > 0 ? path : [UNCATEGORIZED];
           buckets.forEach(c => {
@@ -375,7 +376,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ dayTodos }) => {
     dayTodos.forEach(d => {
       if (!hasDate(d.date)) return; // skip the undated Task Planner bucket
       (d.todos || []).forEach(t => {
-        if (t && t.completed && typeof t.xp === 'number') {
+        if (t && isDone(t) && typeof t.xp === 'number') {
           rows.push({
             date: d.date,
             text: t.text,

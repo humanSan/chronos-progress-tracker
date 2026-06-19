@@ -30,6 +30,7 @@ import { useRowDnD } from './todosHub/useRowDnD';
 import { HubSidebar } from './todosHub/HubSidebar';
 import { HubToolbar, ToolbarMenuKey } from './todosHub/HubToolbar';
 import { groupCreateSpec } from './todosHub/viewUtils';
+import { isDone } from '../utils/todoStatus';
 import { HubRow } from './todosHub/HubRow';
 import { FieldsMenu } from './todosHub/FieldsMenu';
 import { FilterMenu } from './todosHub/FilterMenu';
@@ -330,7 +331,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
       isCollection: true,
       color: entry.todo.color || DEFAULT_COLLECTION_COLOR,
       parentId: null,
-      completed: false,
+      status: undefined,
       dueDate: undefined,
       duePercentage: undefined,
       startTime: undefined,
@@ -483,7 +484,7 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const handleToggleTodo = useStableCallback((id: string) => {
     if (sectionsConfig.autoArchive) {
       const entry = entries.find((e) => e.todo.id === id);
-      if (entry && !entry.todo.completed) {
+      if (entry && !isDone(entry.todo)) {
         onArchiveTodo(id);
         return;
       }

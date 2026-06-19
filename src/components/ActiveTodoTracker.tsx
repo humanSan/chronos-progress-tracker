@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { Todo } from '../types';
+import { isDone } from '../utils/todoStatus';
 import { parse, differenceInSeconds, startOfDay } from 'date-fns';
 
 interface ActiveTodoTrackerProps {
@@ -65,13 +66,13 @@ export const ActiveTodoTracker: React.FC<ActiveTodoTrackerProps> = ({ todo, onCl
       <div className="flex items-center gap-4 relative z-10 pr-10">
         <button 
           onClick={onToggle}
-          className={`transition-colors ${todo.completed ? 'text-[var(--accent1)]' : 'text-white hover:text-[var(--accent1)]'}`}
+          className={`transition-colors ${isDone(todo) ? 'text-[var(--accent1)]' : 'text-white hover:text-[var(--accent1)]'}`}
         >
-          {todo.completed ? <CheckCircle2 size={24} /> : <Circle size={24} strokeWidth={2.5} />}
+          {isDone(todo) ? <CheckCircle2 size={24} /> : <Circle size={24} strokeWidth={2.5} />}
         </button>
 
         <div className="flex-1 min-w-0">
-          <h3 className={`text-lg font-medium transition-all ${todo.completed ? 'text-white/20 line-through' : 'text-white'}`}>
+          <h3 className={`text-lg font-medium transition-all ${isDone(todo) ? 'text-white/20 line-through' : 'text-white'}`}>
             {todo.text}
           </h3>
         </div>

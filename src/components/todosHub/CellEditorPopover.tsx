@@ -70,11 +70,8 @@ export const CellEditorPopover: React.FC<{
           options={col === 'status' ? STATUS_OPTIONS : PRIORITY_OPTIONS}
           value={col === 'status' ? entry.todo.status : entry.todo.priority}
           onChange={(val) => {
-            save({
-              [col]: val || undefined,
-              // Status drives the checkbox: Completed ⇒ checked, anything else ⇒ unchecked.
-              ...(col === 'status' ? { completed: val === 'completed' } : {}),
-            });
+            // Completion is derived from status; the save path stamps completedAt.
+            save({ [col]: val || undefined });
             onClose();
           }}
         />
