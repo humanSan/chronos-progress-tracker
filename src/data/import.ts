@@ -1,23 +1,23 @@
 import type { Todo, Tracker, Workspace } from '../types';
-import type { UserSettings, HubLayout } from './settings';
+import type { UserSettings } from './settings';
 import { apiFetch } from './apiClient';
 import type { TodoBatch } from './todos';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// One-time localStorage → DB import (Phase 6, DATABASE_MIGRATION_NOTES §5.6).
-// Runs automatically on first authenticated load when the DB is empty and local
-// prototype data exists. Reads the old `dun-*` keys, normalizes legacy completion
-// (status is the source of truth), remaps the global-PK workspace ids (the legacy
-// fixed 'personal' id would collide across users), and uploads via the existing
-// API. Local data is left intact as a fallback — only a flag is written.
+// Manual backup export / import (the Account panel's Export/Import buttons).
+//
+// Export snapshots the user's current DB state. Import MERGES by id into the DB —
+// ids absent in the DB are inserted, ids that already exist are overwritten with
+// the imported values, and existing rows not present in the backup are left
+// untouched (no deletes). Ids are preserved so the merge can match on them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Legacy localStorage keys (kept literal here so the hub constants can be removed).
+// Legacy localStorage keys — only used to read the old localStorage-dump backup
+// format that the pre-DB Export button produced, so those files still import.
 const LS = {
   todos: 'dun-todos',
   trackers: 'dun-trackers',
   workspaces: 'dun-workspaces',
-  activeWorkspace: 'dun-active-workspace',
   theme: 'dun-theme',
   weekStartsOn: 'dun-week-starts-on',
   countdownMode: 'dun-countdown-mode',
@@ -25,103 +25,16 @@ const LS = {
   hubViews: 'dun-hub-views',
   hubColWidths: 'dun-hub-col-widths',
   hubCollapsed: 'dun-hub-collapsed',
-  hubView: 'dun-hub-view',
-  sidebarWidth: 'dun-hub-sidebar-width',
-  sidebarHidden: 'dun-hub-sidebar-hidden',
-  sidebarCollapsed: 'dun-hub-sidebar-collapsed',
 } as const;
 
-export const IMPORTED_FLAG = 'dun-db-imported';
-
-// The legacy implicit single-workspace id (pre-workspaces era). Todos with no
-// workspaceId belonged here.
-const LEGACY_WS_ID = 'personal';
-
-function readJSON<T>(key: string, fallback: T): T {
-  const raw = localStorage.getItem(key);
-  if (raw == null) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-export interface LocalData {
-  workspaces: Workspace[];
+export interface BackupData {
+  version: number;
+  exportedAt?: string;
   todos: Todo[];
   trackers: Tracker[];
-  activeWorkspaceId: string;
-  theme?: any;
-  weekStartsOn?: number;
-  countdownMode?: 'off' | 'time' | 'percent';
-  xpEnabled?: boolean;
-  hubViews?: Record<string, any>;
-  hubColWidths?: Record<string, number>;
-  hubCollapsed?: string[];
-  hubLayout?: HubLayout;
-}
-
-// Read everything importable from localStorage. Returns null when there's no core
-// domain data worth importing (todos/trackers/workspaces all empty).
-export function readLocalData(): LocalData | null {
-  const todos = readJSON<Todo[]>(LS.todos, []) ?? [];
-  const trackers = readJSON<Tracker[]>(LS.trackers, []) ?? [];
-  let workspaces = readJSON<Workspace[]>(LS.workspaces, []) ?? [];
-
-  if (todos.length === 0 && trackers.length === 0 && workspaces.length === 0) return null;
-
-  // Ensure a workspace exists for every id referenced by a todo (undefined/''
-  // means the legacy 'personal' workspace). Synthesize any that are missing.
-  const referenced = new Set<string>();
-  for (const t of todos) referenced.add(t?.workspaceId || LEGACY_WS_ID);
-  const known = new Set(workspaces.map((w) => w.id));
-  for (const id of referenced) {
-    if (!known.has(id)) {
-      workspaces.push({ id, name: id === LEGACY_WS_ID ? 'Personal' : 'Workspace' });
-    }
-  }
-  // Guarantee at least one workspace if there are todos but no workspace list.
-  if (workspaces.length === 0 && todos.length > 0) {
-    workspaces = [{ id: LEGACY_WS_ID, name: 'Personal' }];
-  }
-
-  const xpRaw = localStorage.getItem(LS.xpEnabled);
-  const widthRaw = localStorage.getItem(LS.sidebarWidth);
-  const hubLayout: HubLayout = {
-    selectedView: localStorage.getItem(LS.hubView) || undefined,
-    sidebarWidth: widthRaw ? Number(widthRaw) : undefined,
-    sidebarHidden: localStorage.getItem(LS.sidebarHidden) === '1',
-    sidebarCollapsed: readJSON<string[]>(LS.sidebarCollapsed, []),
-  };
-
-  const weekRaw = localStorage.getItem(LS.weekStartsOn);
-  const countdown = localStorage.getItem(LS.countdownMode) as LocalData['countdownMode'] | null;
-
-  return {
-    workspaces,
-    todos,
-    trackers,
-    activeWorkspaceId: localStorage.getItem(LS.activeWorkspace) || '',
-    theme: readJSON<any>(LS.theme, undefined),
-    weekStartsOn: weekRaw != null ? parseInt(weekRaw, 10) : undefined,
-    countdownMode: countdown ?? undefined,
-    xpEnabled: xpRaw != null ? xpRaw !== 'false' : undefined,
-    hubViews: readJSON<Record<string, any>>(LS.hubViews, undefined as any),
-    hubColWidths: readJSON<Record<string, number>>(LS.hubColWidths, undefined as any),
-    hubCollapsed: readJSON<string[]>(LS.hubCollapsed, undefined as any),
-    hubLayout,
-  };
-}
-
-export interface ImportPayload {
   workspaces: Workspace[];
-  todos: Todo[]; // topologically sorted (parents before children) for FK inserts
-  trackers: Tracker[];
-  settings: Partial<UserSettings>;
+  settings?: Partial<UserSettings>;
 }
-
-const genId = () => Math.random().toString(36).substr(2, 9);
 
 // Order todos so every parent precedes its children (the FK on parent_id is
 // checked per-statement, so a child can't be inserted before its parent).
@@ -140,86 +53,127 @@ function topoSort(todos: Todo[]): Todo[] {
   return out;
 }
 
-// Build the upload payload: remap workspace ids (keeps todo/tracker ids — only the
-// shared 'personal' workspace id is a real collision risk), normalize completion,
-// drop the legacy `completed` field, and remap the hub view-config blobs that key
-// off workspace ids.
-export function buildImportPayload(local: LocalData): ImportPayload {
-  const wsIdMap = new Map<string, string>();
-  for (const w of local.workspaces) wsIdMap.set(w.id, genId());
-  const mapWs = (id?: string) => wsIdMap.get(id || LEGACY_WS_ID) ?? wsIdMap.get(LEGACY_WS_ID)!;
-
-  const workspaces: Workspace[] = local.workspaces.map((w) => ({ id: wsIdMap.get(w.id)!, name: w.name }));
-
-  const todoIds = new Set(local.todos.map((t) => t.id));
-  const todos: Todo[] = local.todos.map((t) => {
-    const { ...rest } = t as Todo & { completed?: boolean };
-    const legacyCompleted = (t as any).completed === true;
-    const done = t.status === 'completed' || legacyCompleted;
-    const status = done ? 'completed' : t.status ?? 'todo';
-    // Drop a parentId that points outside the imported set (would break the FK).
-    const parentId = t.parentId && todoIds.has(t.parentId) ? t.parentId : t.parentId ? null : t.parentId;
-    const next: Todo = {
-      ...rest,
-      status,
-      parentId,
-      workspaceId: mapWs(t.workspaceId),
-      createdAt: t.createdAt ?? Date.now(),
-    };
-    delete (next as any).completed; // generated column server-side
-    return next;
-  });
-
-  const trackers: Tracker[] = local.trackers.map((tr) => ({ ...tr, createdAt: tr.createdAt ?? Date.now() }));
-
-  // Remap the workspace-id prefix in the per-view hub config keys (`wsId:viewId`).
-  let hubViews = local.hubViews;
-  if (hubViews) {
-    const remapped: Record<string, any> = {};
-    for (const [key, val] of Object.entries(hubViews)) {
-      const sep = key.indexOf(':');
-      if (sep > 0) {
-        const ws = key.slice(0, sep);
-        const rest = key.slice(sep + 1);
-        remapped[`${wsIdMap.get(ws) ?? ws}:${rest}`] = val;
-      } else {
-        remapped[key] = val;
-      }
-    }
-    hubViews = remapped;
-  }
-
-  const activeWorkspaceId =
-    (local.activeWorkspaceId && wsIdMap.get(local.activeWorkspaceId)) || workspaces[0]?.id;
-
-  const settings: Partial<UserSettings> = {};
-  if (local.theme) settings.theme = local.theme;
-  if (local.weekStartsOn != null && !Number.isNaN(local.weekStartsOn)) settings.weekStartsOn = local.weekStartsOn;
-  if (local.countdownMode) settings.countdownMode = local.countdownMode;
-  if (local.xpEnabled != null) settings.xpEnabled = local.xpEnabled;
-  if (activeWorkspaceId) settings.activeWorkspaceId = activeWorkspaceId;
-  if (hubViews) settings.hubViews = hubViews;
-  if (local.hubColWidths) settings.hubColWidths = local.hubColWidths;
-  if (local.hubCollapsed) settings.hubCollapsed = local.hubCollapsed;
-  if (local.hubLayout) settings.hubLayout = local.hubLayout;
-
-  return { workspaces, todos: topoSort(todos), trackers, settings };
+// Snapshot the account's current DB state for download.
+export async function buildBackup(): Promise<BackupData> {
+  const [todos, trackers, workspaces, settings] = await Promise.all([
+    apiFetch<Todo[]>('/todos'),
+    apiFetch<Tracker[]>('/trackers'),
+    apiFetch<Workspace[]>('/workspaces'),
+    apiFetch<Partial<UserSettings>>('/settings'),
+  ]);
+  return { version: 2, exportedAt: new Date().toISOString(), todos, trackers, workspaces, settings };
 }
 
-// Upload the payload, respecting FK order: workspaces → todos (one batch) →
-// trackers → settings. Throws on the first failed request.
-export async function uploadImport(payload: ImportPayload): Promise<void> {
-  for (const ws of payload.workspaces) {
-    await apiFetch('/workspaces', { method: 'POST', body: JSON.stringify(ws) });
+// Normalize an imported todo: status is the source of truth, the legacy `completed`
+// flag is folded in and dropped (it's a generated column server-side). Ids are
+// preserved (the merge matches on them).
+function normalizeTodoForImport(t: any): Todo {
+  const { completed: _legacy, ...rest } = t ?? {};
+  const done = t?.status === 'completed' || t?.completed === true;
+  return {
+    ...rest,
+    status: done ? 'completed' : t?.status ?? 'todo',
+    createdAt: t?.createdAt ?? Date.now(),
+  } as Todo;
+}
+
+// Parse a backup file. Accepts the current format (top-level todos/trackers/
+// workspaces arrays) and the legacy localStorage-dump format (`dun-*` keys whose
+// values are JSON strings) produced by the old Export button.
+export function parseBackup(raw: string): BackupData {
+  const json = JSON.parse(raw);
+
+  if (json && (Array.isArray(json.todos) || Array.isArray(json.trackers) || Array.isArray(json.workspaces))) {
+    return {
+      version: json.version ?? 2,
+      todos: Array.isArray(json.todos) ? json.todos : [],
+      trackers: Array.isArray(json.trackers) ? json.trackers : [],
+      workspaces: Array.isArray(json.workspaces) ? json.workspaces : [],
+      settings: json.settings,
+    };
   }
-  if (payload.todos.length) {
-    const batch: TodoBatch = { upserts: payload.todos };
+
+  // Legacy dump: { "dun-todos": "<json string>", ... }.
+  const val = (k: string, fb: any) => {
+    const v = json?.[k];
+    if (typeof v !== 'string') return fb;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return fb;
+    }
+  };
+  const weekRaw = json?.[LS.weekStartsOn];
+  const xpRaw = json?.[LS.xpEnabled];
+  const settings: Partial<UserSettings> = {};
+  const theme = val(LS.theme, undefined);
+  if (theme) settings.theme = theme;
+  if (typeof weekRaw === 'string' && weekRaw !== '') settings.weekStartsOn = parseInt(weekRaw, 10);
+  if (typeof json?.[LS.countdownMode] === 'string') settings.countdownMode = json[LS.countdownMode];
+  if (typeof xpRaw === 'string') settings.xpEnabled = xpRaw !== 'false';
+  const hubViews = val(LS.hubViews, undefined);
+  if (hubViews) settings.hubViews = hubViews;
+  const hubColWidths = val(LS.hubColWidths, undefined);
+  if (hubColWidths) settings.hubColWidths = hubColWidths;
+  const hubCollapsed = val(LS.hubCollapsed, undefined);
+  if (hubCollapsed) settings.hubCollapsed = hubCollapsed;
+
+  return {
+    version: 1,
+    todos: val(LS.todos, []),
+    trackers: val(LS.trackers, []),
+    workspaces: val(LS.workspaces, []),
+    settings: Object.keys(settings).length ? settings : undefined,
+  };
+}
+
+// Merge a backup into the DB by id (add new, overwrite conflicts, leave the rest).
+export async function mergeImportToDb(backup: BackupData): Promise<void> {
+  // Workspaces first so imported todos' FKs resolve. Add new / rename existing.
+  if (backup.workspaces?.length) {
+    const existing = await apiFetch<Workspace[]>('/workspaces');
+    const existingIds = new Set(existing.map((w) => w.id));
+    for (const ws of backup.workspaces) {
+      if (!ws?.id) continue;
+      if (existingIds.has(ws.id)) {
+        await apiFetch(`/workspaces/${ws.id}`, { method: 'PATCH', body: JSON.stringify({ name: ws.name ?? '' }) });
+      } else {
+        await apiFetch('/workspaces', { method: 'POST', body: JSON.stringify(ws) });
+      }
+    }
+  }
+
+  // Todos: one transactional batch upsert (insert new / overwrite conflicts;
+  // rows not in the backup are left untouched). Null out parentIds that point at
+  // a todo present in neither the DB nor the backup so the FK can't fail.
+  if (backup.todos?.length) {
+    const existing = await apiFetch<Todo[]>('/todos');
+    const known = new Set<string>([...existing.map((t) => t.id), ...backup.todos.map((t) => t.id)]);
+    const normalized = backup.todos.map((t) => {
+      const n = normalizeTodoForImport(t);
+      if (n.parentId && !known.has(n.parentId)) n.parentId = null;
+      return n;
+    });
+    const batch: TodoBatch = { upserts: topoSort(normalized) };
     await apiFetch('/todos/batch', { method: 'POST', body: JSON.stringify(batch) });
   }
-  for (const tr of payload.trackers) {
-    await apiFetch('/trackers', { method: 'POST', body: JSON.stringify(tr) });
+
+  // Trackers: add new / overwrite existing.
+  if (backup.trackers?.length) {
+    const existing = await apiFetch<Tracker[]>('/trackers');
+    const existingIds = new Set(existing.map((t) => t.id));
+    for (const tr of backup.trackers) {
+      if (!tr?.id) continue;
+      if (existingIds.has(tr.id)) {
+        await apiFetch(`/trackers/${tr.id}`, { method: 'PATCH', body: JSON.stringify(tr) });
+      } else {
+        await apiFetch('/trackers', { method: 'POST', body: JSON.stringify(tr) });
+      }
+    }
   }
-  if (Object.keys(payload.settings).length) {
-    await apiFetch('/settings', { method: 'PUT', body: JSON.stringify(payload.settings) });
+
+  // Settings: restore the prefs / hub-layout blobs (server merges per-field).
+  if (backup.settings && Object.keys(backup.settings).length) {
+    await apiFetch('/settings', { method: 'PUT', body: JSON.stringify(backup.settings) });
   }
 }

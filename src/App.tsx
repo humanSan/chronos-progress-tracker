@@ -17,13 +17,10 @@ import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 import { StopwatchWidget, TimerState } from './components/StopwatchWidget';
 import { StopwatchFullscreen } from './components/StopwatchFullscreen';
 import { authClient } from "./auth"
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from './data/keys';
 import { useTodos, useCreateTodo, useUpdateTodo, useDeleteTodo, useBatchTodos } from './data/todos';
 import { useTrackers, useCreateTracker, useUpdateTracker, useDeleteTracker } from './data/trackers';
 import { useWorkspaces, useCreateWorkspace, useRenameWorkspace } from './data/workspaces';
 import { useSettings, useUpdateSettings } from './data/settings';
-import { readLocalData, buildImportPayload, uploadImport, IMPORTED_FLAG } from './data/import';
 
 const DEFAULT_THEME: Theme = { accent1: '#e9ec6a', accent2: '#a2beb7' };
 
@@ -80,7 +77,6 @@ export default function App() {
   const renameWorkspaceMut = useRenameWorkspace();
 
   // ── Per-user settings (DB-synced; replaces the old localStorage prefs) ───────
-  const qc = useQueryClient();
   const settingsQuery = useSettings(isAuthenticated);
   const settings = settingsQuery.data;
   const updateSettings = useUpdateSettings();
@@ -110,48 +106,11 @@ export default function App() {
   const activeWorkspaceId = settings?.activeWorkspaceId ?? '';
   const setActiveWorkspaceId = (id: string) => updateSettings({ activeWorkspaceId: id });
 
-  // ── One-time localStorage → DB import (Phase 6) ────────────────────────────
-  // On first authenticated load, if the DB is empty and local prototype data
-  // exists, import it silently, then continue. Gated so it can't run twice
-  // (DB-empty check + a local flag) and so seeding below waits for it.
-  const [importStatus, setImportStatus] = useState<'idle' | 'running' | 'done'>('idle');
-  const importRunRef = useRef(false);
-  useEffect(() => {
-    if (!isAuthenticated) { setImportStatus('idle'); importRunRef.current = false; return; }
-    if (importStatus !== 'idle' || importRunRef.current) return;
-    if (todosQuery.isLoading || trackersQuery.isLoading || workspacesQuery.isLoading || settingsQuery.isLoading) return;
-    // Already imported on this device, or the DB already has data → nothing to do.
-    if (localStorage.getItem(IMPORTED_FLAG) === 'true' || workspaces.length > 0) { setImportStatus('done'); return; }
-    const local = readLocalData();
-    if (!local) { setImportStatus('done'); return; }
-    importRunRef.current = true;
-    setImportStatus('running');
-    (async () => {
-      try {
-        await uploadImport(buildImportPayload(local));
-        localStorage.setItem(IMPORTED_FLAG, 'true');
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: queryKeys.workspaces }),
-          qc.invalidateQueries({ queryKey: queryKeys.todos }),
-          qc.invalidateQueries({ queryKey: queryKeys.trackers }),
-          qc.invalidateQueries({ queryKey: queryKeys.settings }),
-        ]);
-      } catch (e) {
-        // Best-effort: log, mark the flag so a partial run can't duplicate on the
-        // next load, and fall through to the app (local data is kept as a backup).
-        console.error('Local → DB import failed', e);
-        localStorage.setItem(IMPORTED_FLAG, 'true');
-      } finally {
-        setImportStatus('done');
-      }
-    })();
-  }, [isAuthenticated, importStatus, todosQuery.isLoading, trackersQuery.isLoading, workspacesQuery.isLoading, settingsQuery.isLoading, workspaces.length]);
-
-  // First-run seeding + keep activeWorkspaceId valid once data + import settle.
+  // First-run seeding + keep activeWorkspaceId valid once data has loaded.
   const seededRef = useRef(false);
   useEffect(() => {
     if (!isAuthenticated) { seededRef.current = false; return; }
-    if (workspacesQuery.isLoading || settingsQuery.isLoading || importStatus !== 'done') return;
+    if (workspacesQuery.isLoading || settingsQuery.isLoading) return;
     if (workspaces.length === 0) {
       if (seededRef.current) return;
       seededRef.current = true;
@@ -163,7 +122,7 @@ export default function App() {
     if (!workspaces.some(w => w.id === activeWorkspaceId)) {
       setActiveWorkspaceId(workspaces[0].id);
     }
-  }, [isAuthenticated, workspacesQuery.isLoading, settingsQuery.isLoading, importStatus, workspaces, activeWorkspaceId]);
+  }, [isAuthenticated, workspacesQuery.isLoading, settingsQuery.isLoading, workspaces, activeWorkspaceId]);
 
   const addWorkspace = (): string => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -508,15 +467,10 @@ export default function App() {
       </div>
     );
   }
-  if (
-    todosQuery.isLoading ||
-    workspacesQuery.isLoading ||
-    settingsQuery.isLoading ||
-    importStatus !== 'done'
-  ) {
+  if (todosQuery.isLoading || workspacesQuery.isLoading || settingsQuery.isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-neutral-950 text-white/40 text-sm">
-        {importStatus === 'running' ? 'Importing your data…' : 'Loading your workspace…'}
+        Loading your workspace…
       </div>
     );
   }

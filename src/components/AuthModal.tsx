@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { X, Clock, Upload, Download, LogOut } from 'lucide-react';
 import { authClient } from '../auth';
+import { buildBackup, parseBackup, mergeImportToDb } from '../data/import';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -156,6 +158,9 @@ const SignedInPane: React.FC<{
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<null | 'export' | 'import'>(null);
+  const [dataMsg, setDataMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const handleEmailSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,37 +177,45 @@ const SignedInPane: React.FC<{
     setConfirmPassword('');
   };
 
-  const handleExport = () => {
-    const data: Record<string, string> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('dun-')) data[key] = localStorage.getItem(key) ?? '';
+  // Export the account's current DB state (todos/trackers/workspaces/settings).
+  const handleExport = async () => {
+    setDataMsg(null);
+    setBusy('export');
+    try {
+      const backup = await buildBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dunzo-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[export] failed', err);
+      setDataMsg({ kind: 'err', text: 'Export failed. Please try again.' });
+    } finally {
+      setBusy(null);
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dunzo-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import = merge into the DB by id (add new, overwrite conflicts, leave the rest).
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-importing the same file
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        Object.entries(data).forEach(([key, value]) => {
-          if (key.startsWith('dun-')) localStorage.setItem(key, value as string);
-        });
-        window.location.reload();
-      } catch {
-        console.error('[import] Invalid backup file');
-      }
-    };
-    reader.readAsText(file);
+    setDataMsg(null);
+    setBusy('import');
+    try {
+      const backup = parseBackup(await file.text());
+      await mergeImportToDb(backup);
+      await qc.invalidateQueries(); // refetch everything from the DB
+      setDataMsg({ kind: 'ok', text: 'Import complete — your data has been merged.' });
+    } catch (err) {
+      console.error('[import] failed', err);
+      setDataMsg({ kind: 'err', text: 'Import failed — check that the file is a valid backup.' });
+    } finally {
+      setBusy(null);
+    }
   };
 
   const sectionLabel = (text: string) => (
@@ -298,18 +311,20 @@ const SignedInPane: React.FC<{
             <button
               type="button"
               onClick={handleExport}
-              className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-all"
+              disabled={busy !== null}
+              className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={15} />
-              Export
+              {busy === 'export' ? 'Exporting…' : 'Export'}
             </button>
             <button
               type="button"
               onClick={() => importRef.current?.click()}
-              className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-all"
+              disabled={busy !== null}
+              className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Upload size={15} />
-              Import
+              {busy === 'import' ? 'Importing…' : 'Import'}
             </button>
             <input
               ref={importRef}
@@ -319,8 +334,15 @@ const SignedInPane: React.FC<{
               onChange={handleImport}
             />
           </div>
+          {dataMsg && (
+            <p className={`text-[10px] mt-2 ${dataMsg.kind === 'ok' ? 'text-green-400/80' : 'text-red-400/80'}`}>
+              {dataMsg.text}
+            </p>
+          )}
           <p className="text-[10px] text-white/25 mt-2">
-            Import replaces all existing data and reloads the app.
+            Export downloads your tasks, trackers, workspaces, and settings. Import
+            merges them back in by id — new items are added, matching items are
+            overwritten, and anything not in the file is left untouched.
           </p>
         </div>
 
