@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import express from 'express';
 import { requireAuth } from './auth';
+import { errorMiddleware } from './http';
+import { todosRouter } from './routes/todos';
+import { workspacesRouter } from './routes/workspaces';
+import { trackersRouter } from './routes/trackers';
+import { settingsRouter } from './routes/settings';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -23,10 +28,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// Proof endpoint: returns the authenticated user's id. CRUD lands in Phase 3.
+// Proof endpoint: returns the authenticated user's id.
 app.get('/api/me', requireAuth, (req, res) => {
   res.json({ userId: req.userId });
 });
+
+// Data API — all scoped by the authenticated user_id.
+app.use('/api/todos', requireAuth, todosRouter);
+app.use('/api/workspaces', requireAuth, workspacesRouter);
+app.use('/api/trackers', requireAuth, trackersRouter);
+app.use('/api/settings', requireAuth, settingsRouter);
+
+// Final error handler (must be last).
+app.use(errorMiddleware);
 
 const port = Number(process.env.PORT) || 8787;
 app.listen(port, () => {
