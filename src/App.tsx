@@ -17,6 +17,7 @@ import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 import { StopwatchWidget, TimerState } from './components/StopwatchWidget';
 import { StopwatchFullscreen } from './components/StopwatchFullscreen';
 import { authClient } from "./auth"
+import { apiFetch } from "./data/apiClient"
 
 const DEFAULT_TRACKERS: Tracker[] = [
   {
@@ -104,6 +105,16 @@ export default function App() {
   // localStorage; auth only powers the account modal until the Phase 4 data layer.
   const authSession = authClient.useSession();
   const isAuthenticated = !!authSession.data;
+
+  // Phase 2 proof-of-loop: once signed in, ping the backend's /api/me with the
+  // bearer token and log the verified userId. (Temporary — remove once Phase 3
+  // CRUD calls exercise the API for real.)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    apiFetch<{ userId: string }>('/me')
+      .then((r) => console.log('[api/me] authenticated userId:', r.userId))
+      .catch((e) => console.error('[api/me] failed:', e));
+  }, [isAuthenticated]);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('dun-theme');
     return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
