@@ -3,4 +3,5 @@ export const queryKeys = {
   todos: ['todos'] as const,
   workspaces: ['workspaces'] as const,
   trackers: ['trackers'] as const,
+  settings: ['settings'] as const,
 };

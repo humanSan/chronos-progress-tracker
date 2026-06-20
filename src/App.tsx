@@ -17,9 +17,15 @@ import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 import { StopwatchWidget, TimerState } from './components/StopwatchWidget';
 import { StopwatchFullscreen } from './components/StopwatchFullscreen';
 import { authClient } from "./auth"
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from './data/keys';
 import { useTodos, useCreateTodo, useUpdateTodo, useDeleteTodo, useBatchTodos } from './data/todos';
 import { useTrackers, useCreateTracker, useUpdateTracker, useDeleteTracker } from './data/trackers';
 import { useWorkspaces, useCreateWorkspace, useRenameWorkspace } from './data/workspaces';
+import { useSettings, useUpdateSettings } from './data/settings';
+import { readLocalData, buildImportPayload, uploadImport, IMPORTED_FLAG } from './data/import';
+
+const DEFAULT_THEME: Theme = { accent1: '#e9ec6a', accent2: '#a2beb7' };
 
 // Flat list → in-memory bucket view, grouped by dueDate (undated → UNDATED).
 // Within-day order follows `dailyOrder` (the daily list's own persisted order;
@@ -49,19 +55,6 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [weekStartsOn, setWeekStartsOn] = useState<number>(() => {
-    const saved = localStorage.getItem('dun-week-starts-on');
-    return saved ? parseInt(saved, 10) : 1;
-  });
-  const [countdownMode, setCountdownMode] = useState<'off' | 'time' | 'percent'>(() => {
-    const saved = localStorage.getItem('dun-countdown-mode');
-    return (saved as 'off' | 'time' | 'percent') || 'off';
-  });
-  const [xpEnabled, setXpEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('dun-xp-enabled') !== 'false'; // default on
-  });
-
-
   // Real Neon Auth session. The app is gated on this (see render below): server
   // data loads only once authenticated.
   const authSession = authClient.useSession();
@@ -86,10 +79,20 @@ export default function App() {
   const createWorkspace = useCreateWorkspace();
   const renameWorkspaceMut = useRenameWorkspace();
 
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('dun-theme');
-    return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
-  });
+  // ── Per-user settings (DB-synced; replaces the old localStorage prefs) ───────
+  const qc = useQueryClient();
+  const settingsQuery = useSettings(isAuthenticated);
+  const settings = settingsQuery.data;
+  const updateSettings = useUpdateSettings();
+
+  const theme = settings?.theme ?? DEFAULT_THEME;
+  const setTheme = (t: Theme) => updateSettings({ theme: t });
+  const weekStartsOn = settings?.weekStartsOn ?? 1;
+  const setWeekStartsOn = (v: number) => updateSettings({ weekStartsOn: v });
+  const countdownMode = settings?.countdownMode ?? 'off';
+  const setCountdownMode = (v: 'off' | 'time' | 'percent') => updateSettings({ countdownMode: v });
+  const xpEnabled = settings?.xpEnabled ?? true;
+  const setXpEnabled = (v: boolean) => updateSettings({ xpEnabled: v });
   const [activeView, setActiveView] = useState<'trackers' | 'todos' | 'hub' | 'calendar' | 'stats'>(() => {
     const saved = localStorage.getItem('dun-active-view');
     return saved === 'trackers' || saved === 'todos' || saved === 'hub' || saved === 'calendar' || saved === 'stats'
@@ -101,19 +104,54 @@ export default function App() {
   }, [activeView]);
 
   // ── Task Planner workspaces (independent todo databases) ───────────────────
-  // The workspace list is server data; activeWorkspaceId is a per-device UI pref
-  // (stays local). There is no fixed 'personal' id anymore — a new user is seeded
-  // a "Personal" workspace below (workspace id is a global PK, so it must be unique).
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
-    () => localStorage.getItem('dun-active-workspace') || ''
-  );
-  useEffect(() => { localStorage.setItem('dun-active-workspace', activeWorkspaceId); }, [activeWorkspaceId]);
+  // The workspace list is server data; activeWorkspaceId is now a DB-synced pref
+  // (cross-device "last workspace"). There is no fixed 'personal' id anymore — a
+  // new user is seeded a "Personal" workspace below (workspace id is a global PK).
+  const activeWorkspaceId = settings?.activeWorkspaceId ?? '';
+  const setActiveWorkspaceId = (id: string) => updateSettings({ activeWorkspaceId: id });
 
-  // First-run seeding + keep activeWorkspaceId valid once workspaces have loaded.
+  // ── One-time localStorage → DB import (Phase 6) ────────────────────────────
+  // On first authenticated load, if the DB is empty and local prototype data
+  // exists, import it silently, then continue. Gated so it can't run twice
+  // (DB-empty check + a local flag) and so seeding below waits for it.
+  const [importStatus, setImportStatus] = useState<'idle' | 'running' | 'done'>('idle');
+  const importRunRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated) { setImportStatus('idle'); importRunRef.current = false; return; }
+    if (importStatus !== 'idle' || importRunRef.current) return;
+    if (todosQuery.isLoading || trackersQuery.isLoading || workspacesQuery.isLoading || settingsQuery.isLoading) return;
+    // Already imported on this device, or the DB already has data → nothing to do.
+    if (localStorage.getItem(IMPORTED_FLAG) === 'true' || workspaces.length > 0) { setImportStatus('done'); return; }
+    const local = readLocalData();
+    if (!local) { setImportStatus('done'); return; }
+    importRunRef.current = true;
+    setImportStatus('running');
+    (async () => {
+      try {
+        await uploadImport(buildImportPayload(local));
+        localStorage.setItem(IMPORTED_FLAG, 'true');
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.workspaces }),
+          qc.invalidateQueries({ queryKey: queryKeys.todos }),
+          qc.invalidateQueries({ queryKey: queryKeys.trackers }),
+          qc.invalidateQueries({ queryKey: queryKeys.settings }),
+        ]);
+      } catch (e) {
+        // Best-effort: log, mark the flag so a partial run can't duplicate on the
+        // next load, and fall through to the app (local data is kept as a backup).
+        console.error('Local → DB import failed', e);
+        localStorage.setItem(IMPORTED_FLAG, 'true');
+      } finally {
+        setImportStatus('done');
+      }
+    })();
+  }, [isAuthenticated, importStatus, todosQuery.isLoading, trackersQuery.isLoading, workspacesQuery.isLoading, settingsQuery.isLoading, workspaces.length]);
+
+  // First-run seeding + keep activeWorkspaceId valid once data + import settle.
   const seededRef = useRef(false);
   useEffect(() => {
     if (!isAuthenticated) { seededRef.current = false; return; }
-    if (workspacesQuery.isLoading) return;
+    if (workspacesQuery.isLoading || settingsQuery.isLoading || importStatus !== 'done') return;
     if (workspaces.length === 0) {
       if (seededRef.current) return;
       seededRef.current = true;
@@ -125,7 +163,7 @@ export default function App() {
     if (!workspaces.some(w => w.id === activeWorkspaceId)) {
       setActiveWorkspaceId(workspaces[0].id);
     }
-  }, [isAuthenticated, workspacesQuery.isLoading, workspaces, activeWorkspaceId]);
+  }, [isAuthenticated, workspacesQuery.isLoading, settingsQuery.isLoading, importStatus, workspaces, activeWorkspaceId]);
 
   const addWorkspace = (): string => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -196,8 +234,8 @@ export default function App() {
     };
   }, [timerState]);
 
+  // Theme is DB-synced now; this effect only reflects it onto the CSS variables.
   useEffect(() => {
-    localStorage.setItem('dun-theme', JSON.stringify(theme));
     document.documentElement.style.setProperty('--accent1', theme.accent1);
     document.documentElement.style.setProperty('--accent2', theme.accent2);
   }, [theme]);
@@ -211,18 +249,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
-
-  useEffect(() => {
-    localStorage.setItem('dun-week-starts-on', weekStartsOn.toString());
-  }, [weekStartsOn]);
-
-  useEffect(() => {
-    localStorage.setItem('dun-countdown-mode', countdownMode);
-  }, [countdownMode]);
-
-  useEffect(() => {
-    localStorage.setItem('dun-xp-enabled', String(xpEnabled));
-  }, [xpEnabled]);
 
   useEffect(() => {
     if (activeTodoId) {
@@ -482,10 +508,15 @@ export default function App() {
       </div>
     );
   }
-  if (todosQuery.isLoading || workspacesQuery.isLoading) {
+  if (
+    todosQuery.isLoading ||
+    workspacesQuery.isLoading ||
+    settingsQuery.isLoading ||
+    importStatus !== 'done'
+  ) {
     return (
       <div className="h-screen flex items-center justify-center bg-neutral-950 text-white/40 text-sm">
-        Loading your workspace…
+        {importStatus === 'running' ? 'Importing your data…' : 'Loading your workspace…'}
       </div>
     );
   }
