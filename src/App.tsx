@@ -100,12 +100,10 @@ export default function App() {
   });
 
 
-  const [session, setSession] = useState<any>(null);
-  
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // TODO(neon-auth): replace with Neon Auth session check
-    return localStorage.getItem('dun-auth-stub') === 'true';
-  });
+  // Real Neon Auth session. The app is NOT gated on this — it stays usable off
+  // localStorage; auth only powers the account modal until the Phase 4 data layer.
+  const authSession = authClient.useSession();
+  const isAuthenticated = !!authSession.data;
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('dun-theme');
     return saved ? JSON.parse(saved) : { accent1: '#e9ec6a', accent2: '#a2beb7' };
@@ -716,15 +714,12 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         isAuthenticated={isAuthenticated}
         onAuthenticated={() => {
-          // TODO(neon-auth): replace with real session persistence from Neon Auth
-          localStorage.setItem('dun-auth-stub', 'true');
-          setIsAuthenticated(true);
+          // Sign-in/up happens inside the modal via authClient; the useSession
+          // hook reflects the new state. Just close.
           setIsAuthModalOpen(false);
         }}
-        onLogout={() => {
-          // TODO(neon-auth): replace with Neon Auth sign-out call
-          localStorage.removeItem('dun-auth-stub');
-          setIsAuthenticated(false);
+        onLogout={async () => {
+          await authClient.signOut();
           setIsAuthModalOpen(false);
         }}
       />

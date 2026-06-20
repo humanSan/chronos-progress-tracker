@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Clock, Upload, Download, LogOut } from 'lucide-react';
+import { authClient } from '../auth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -27,14 +28,25 @@ const SignedOutPane: React.FC<{
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO(neon-auth): replace with real Neon Auth call.
-    //   login:  signInWithCredentials({ username, password })
-    //   signup: signUp({ email, username, password })
-    console.log('[auth stub]', mode, { email, username, password });
-    onAuthenticated();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { error } =
+        mode === 'login'
+          ? await authClient.signIn.email({ email, password })
+          : await authClient.signUp.email({ email, password, name: username });
+      if (error) throw new Error(error.message || 'Authentication failed');
+      onAuthenticated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -78,30 +90,30 @@ const SignedOutPane: React.FC<{
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className={labelClass}>Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              placeholder="you@example.com"
+            />
+          </div>
           {mode === 'signup' && (
             <div>
-              <label className={labelClass}>Email</label>
+              <label className={labelClass}>Username</label>
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className={inputClass}
-                placeholder="you@example.com"
+                placeholder="your_handle"
               />
             </div>
           )}
-          <div>
-            <label className={labelClass}>Username</label>
-            <input
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={inputClass}
-              placeholder="your_handle"
-            />
-          </div>
           <div>
             <label className={labelClass}>Password</label>
             <input
@@ -113,11 +125,19 @@ const SignedOutPane: React.FC<{
               placeholder="••••••••"
             />
           </div>
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
+          )}
           <button
             type="submit"
-            className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold py-2.5 rounded-xl transition-all active:scale-[0.98]"
+            disabled={submitting}
+            className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold py-2.5 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {mode === 'login' ? 'Log In' : 'Create Account'}
+            {submitting
+              ? 'Please wait…'
+              : mode === 'login'
+              ? 'Log In'
+              : 'Create Account'}
           </button>
         </form>
       </div>
