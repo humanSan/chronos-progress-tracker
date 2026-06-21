@@ -30,6 +30,7 @@ import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
 } from './todoFields';
+import { textInputCls } from './todosHub/TextInput';
 
 interface TodoFullViewProps {
   todo: Todo;
@@ -165,8 +166,7 @@ export const TodoFullView: React.FC<TodoFullViewProps> = ({
     if (nowArchived) onClose();
   };
 
-  const fieldCls =
-    'w-full bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-xs font-mono focus:outline-none focus:border-[var(--accent2)] transition-colors';
+  const fieldCls = `${textInputCls} w-full font-mono`;
 
   return (
     <motion.div

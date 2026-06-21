@@ -3,6 +3,7 @@ import { X, ChevronDown, Check } from 'lucide-react';
 import { Todo } from '../../types';
 import { OrganizerEntry, CollectionOption, collectionPath } from '../../utils/todoFilters';
 import { CollectionSearchField } from '../todoFields';
+import { textInputCls } from './TextInput';
 import { COLLECTION_COLORS, DEFAULT_COLLECTION_COLOR, colorName } from './constants';
 
 // ── Collection Edit modal ────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ export const CollectionEditModal: React.FC<{
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Collection name"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-white text-sm focus:outline-none focus:border-[var(--accent2)] placeholder:text-white/25"
+              className={`${textInputCls} w-full`}
             />
           </div>
 
@@ -77,11 +78,16 @@ export const CollectionEditModal: React.FC<{
               <button
                 type="button"
                 onClick={() => setColorOpen((v) => !v)}
-                className="w-full flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-lg px-3 h-9 text-sm text-white"
+                className={`w-full flex items-center gap-2.5 bg-[#2a2a2a] border rounded-lg px-2.5 h-8 text-[13px] text-white transition-colors focus:outline-none ${
+                  colorOpen ? 'border-[var(--accent2)]' : 'border-white/10 hover:border-white/20'
+                }`}
               >
                 <span className="shrink-0 w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color }} />
                 <span className="flex-1 text-left">{colorName(color)}</span>
-                <ChevronDown size={15} className="shrink-0 text-white/40" />
+                <ChevronDown
+                  size={14}
+                  className={`shrink-0 text-white/40 transition-transform ${colorOpen ? 'rotate-180' : ''}`}
+                />
               </button>
               {colorOpen && (
                 <div className="absolute z-10 top-full left-0 mt-1 w-full rounded-lg border border-white/10 bg-[#222222] shadow-2xl p-1 max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:rounded-full">

@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tracker, TrackerType, TrackerDisplayMode, TrackerSecondaryDisplayMode } from '../types';
 import { ListSelect } from './todosHub/ListSelect';
+import { textInputCls } from './todosHub/TextInput';
 
 interface AddTrackerModalProps {
   isOpen: boolean;
@@ -89,7 +90,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. My Project"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent1)] transition-colors"
+                  className={`${textInputCls} w-full`}
                 />
               </div>
 
@@ -122,7 +123,8 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                       required
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent1)]"
+                      style={{ colorScheme: 'dark' }}
+                      className={`${textInputCls} w-full`}
                     />
                   </div>
                   <div>
@@ -132,7 +134,8 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                       required
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent1)]"
+                      style={{ colorScheme: 'dark' }}
+                      className={`${textInputCls} w-full`}
                     />
                   </div>
                 </div>
@@ -145,13 +148,13 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
                     type="color"
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
-                    className="w-10 h-10 bg-transparent border-none cursor-pointer shrink-0"
+                    className="w-10 h-8 bg-transparent border border-white/10 rounded-lg cursor-pointer shrink-0"
                   />
                   <input
                     type="text"
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-[var(--accent1)]"
+                    className={`${textInputCls} flex-1 font-mono`}
                   />
                 </div>
               </div>
