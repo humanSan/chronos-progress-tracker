@@ -500,7 +500,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                 src={backgroundUrl}
                 alt=""
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover blur-[3px] scale-110"
+                className="absolute inset-0 h-full w-full object-cover blur-sm scale-115 brightness-110"
               />
 
               {/* Nav */}
