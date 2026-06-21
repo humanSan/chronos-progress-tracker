@@ -83,42 +83,177 @@ const SectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 const labelCls = 'text-[13px] text-white/65';
 const rowCls = 'flex items-center justify-between gap-4';
 
+const fieldInput =
+  'w-full rounded-lg border border-white/10 bg-white/5 px-3 h-9 text-sm text-white placeholder-white/30 focus:border-[var(--accent2)] focus:outline-none transition-colors';
+const fieldLabel = 'block text-[11px] font-medium text-white/45 mb-1';
+const formButton =
+  'w-full rounded-xl bg-white/10 py-2.5 text-sm font-semibold text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40';
+
+type FormMsg = { kind: 'ok' | 'err'; text: string } | null;
+
+const StatusLine: React.FC<{ msg: FormMsg }> = ({ msg }) =>
+  msg ? (
+    <p className={`text-[11px] mt-1 ${msg.kind === 'ok' ? 'text-green-400/80' : 'text-red-400/80'}`}>
+      {msg.text}
+    </p>
+  ) : null;
+
 // ── Sections ──────────────────────────────────────────────────────────────────
 
 const ProfilePane: React.FC<{
   email?: string;
   name?: string;
   onLogout: () => void;
-}> = ({ email, name, onLogout }) => (
-  <div className="space-y-7">
-    <div>
-      <SectionHeader>Profile</SectionHeader>
-      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-        <img
-          src={accountIcon}
-          alt=""
-          className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10"
-        />
-        <div className="min-w-0">
-          {name && <p className="text-sm font-semibold text-white truncate">{name}</p>}
-          <p className="text-[13px] text-white/50 truncate">{email ?? 'Signed in'}</p>
+}> = ({ email, name, onLogout }) => {
+  const [newEmail, setNewEmail] = useState('');
+  const [emailMsg, setEmailMsg] = useState<FormMsg>(null);
+  const [emailBusy, setEmailBusy] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwMsg, setPwMsg] = useState<FormMsg>(null);
+  const [pwBusy, setPwBusy] = useState(false);
+
+  const handleEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailMsg(null);
+    setEmailBusy(true);
+    try {
+      const { error } = await authClient.changeEmail({ newEmail });
+      if (error) throw new Error(error.message || 'Could not update email');
+      // better-auth sends a confirmation link when the current email is verified.
+      setEmailMsg({ kind: 'ok', text: 'Check your inbox to confirm the new email.' });
+      setNewEmail('');
+    } catch (err) {
+      setEmailMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Something went wrong' });
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
+  const handlePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwMsg(null);
+    if (newPassword !== confirmPassword) {
+      setPwMsg({ kind: 'err', text: 'New passwords do not match.' });
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const { error } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+      if (error) throw new Error(error.message || 'Could not update password');
+      setPwMsg({ kind: 'ok', text: 'Password updated.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPwMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Something went wrong' });
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-7">
+      {/* Identity */}
+      <div>
+        <SectionHeader>Profile</SectionHeader>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
+          {name && <p className="text-sm font-semibold text-white">{name}</p>}
+          <p className="text-[13px] text-white/50">{email ?? 'Signed in'}</p>
         </div>
       </div>
-    </div>
 
-    <div>
-      <SectionHeader>Session</SectionHeader>
-      <button
-        type="button"
-        onClick={onLogout}
-        className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-semibold py-2.5 rounded-xl text-sm transition-all"
-      >
-        <LogOut size={15} />
-        Log Out
-      </button>
+      {/* Change email */}
+      <div>
+        <SectionHeader>Email</SectionHeader>
+        <form onSubmit={handleEmail} className="space-y-2">
+          <div>
+            <label className={fieldLabel}>New email</label>
+            <input
+              type="email"
+              required
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className={fieldInput}
+              placeholder={email ?? 'you@example.com'}
+            />
+          </div>
+          <button type="submit" disabled={emailBusy || !newEmail || newEmail === email} className={formButton}>
+            {emailBusy ? 'Updating…' : 'Update Email'}
+          </button>
+          <StatusLine msg={emailMsg} />
+        </form>
+      </div>
+
+      {/* Change password */}
+      <div>
+        <SectionHeader>Password</SectionHeader>
+        <form onSubmit={handlePassword} className="space-y-2">
+          <div>
+            <label className={fieldLabel}>Current password</label>
+            <input
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className={fieldInput}
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label className={fieldLabel}>New password</label>
+            <input
+              type="password"
+              required
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className={fieldInput}
+              placeholder="••••••••"
+            />
+          </div>
+          <div>
+            <label className={fieldLabel}>Confirm new password</label>
+            <input
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={fieldInput}
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={pwBusy || !currentPassword || !newPassword || !confirmPassword}
+            className={formButton}
+          >
+            {pwBusy ? 'Updating…' : 'Update Password'}
+          </button>
+          <StatusLine msg={pwMsg} />
+        </form>
+      </div>
+
+      {/* Session */}
+      <div>
+        <SectionHeader>Session</SectionHeader>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 font-semibold py-2.5 rounded-xl text-sm transition-all"
+        >
+          <LogOut size={15} />
+          Log Out
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const SettingsPane: React.FC<{
   weekStartsOn: number;
@@ -365,7 +500,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                 src={backgroundUrl}
                 alt=""
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover blur-[3px] scale-110"
               />
 
               {/* Nav */}
@@ -379,7 +514,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                       onClick={() => setSection(key)}
                       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-all ${
                         active
-                          ? 'bg-black/10 text-black backdrop-blur-xs font-bold'
+                          ? 'bg-black/10 text-black font-bold'
                           : 'text-black/90 hover:bg-black/10 hover:text-black font-semibold'
                       }`}
                     >
@@ -397,16 +532,20 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               </div>
             </div>
 
-            {/* Content */}
-            <div className="relative flex-1 overflow-y-auto px-7 py-7">
-              <button
-                onClick={onClose}
-                className="absolute right-4 top-4 rounded-lg p-1.5 text-white/30 transition-all hover:bg-white/10 hover:text-white"
-              >
-                <X size={16} />
-              </button>
+            {/* Right pane: fixed header row (close) + scrollable content below. */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex shrink-0 justify-end px-2 py-2">
+                <button
+                  onClick={onClose}
+                  className="rounded-lg p-1.5 text-white/40 transition-all hover:bg-white/10 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
 
-              {/* Mobile section switcher */}
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto px-7 pb-7">
+                {/* Mobile section switcher */}
               <div className="mb-5 flex gap-1 sm:hidden">
                 {NAV.map(({ key, label }) => (
                   <button
@@ -436,6 +575,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                 />
               )}
               {section === 'data' && <DataPane />}
+              </div>
             </div>
           </motion.div>
         </motion.div>
