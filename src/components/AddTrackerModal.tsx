@@ -60,28 +60,29 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-md bg-[#1A1A1A] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[90vh]"
+            exit={{ opacity: 0, scale: 0.97, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="relative w-full max-w-md bg-[#1A1A1A] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
           >
             {/* Sticky header */}
             <div className="flex justify-between items-center px-6 pt-5 pb-3 shrink-0">
               <h2 className="text-lg font-bold text-white">
                 {editingTracker ? 'Edit Tracker' : 'New Tracker'}
               </h2>
-              <button onClick={onClose} className="p-1.5 hover:bg-white/5 rounded-lg text-white/40">
-                <X size={18} />
+              <button onClick={onClose} className="rounded-lg p-1.5 text-white/40 transition-all hover:bg-white/10 hover:text-white">
+                <X size={16} />
               </button>
             </div>
 
             {/* Scrollable body */}
             <form onSubmit={handleSubmit} className="overflow-y-auto px-6 pb-6 space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Name (Optional)</label>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Name</label>
                 <input
                   type="text"
                   value={name}
@@ -220,7 +221,7 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
 
               <button
                 type="submit"
-                className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold py-3 rounded-2xl transition-all transform active:scale-[0.98]"
+                className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold py-3 rounded-2xl transition-all transform active:scale-[0.98] text-sm"
               >
                 {editingTracker ? 'Save Changes' : 'Create Tracker'}
               </button>
