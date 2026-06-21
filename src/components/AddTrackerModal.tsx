@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tracker, TrackerType, TrackerDisplayMode, TrackerSecondaryDisplayMode } from '../types';
+import { ListSelect } from './todosHub/ListSelect';
 
 interface AddTrackerModalProps {
   isOpen: boolean;
@@ -157,15 +158,13 @@ export const AddTrackerModal: React.FC<AddTrackerModalProps> = ({ isOpen, onClos
 
               <div>
                 <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Precision</label>
-                <select
-                  value={precision}
-                  onChange={(e) => setPrecision(parseInt(e.target.value))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-[var(--accent1)]"
-                >
-                  {[0, 1, 2, 3, 4].map(p => (
-                    <option key={p} value={p} className="bg-[#1A1A1A]">{p} digits</option>
-                  ))}
-                </select>
+                <ListSelect
+                  ariaLabel="Precision"
+                  className="w-full"
+                  value={String(precision)}
+                  onChange={(v) => setPrecision(parseInt(v))}
+                  options={[0, 1, 2, 3, 4].map((p) => ({ value: String(p), label: `${p} digits` }))}
+                />
               </div>
 
               <div>

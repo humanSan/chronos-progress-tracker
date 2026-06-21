@@ -7,6 +7,7 @@ import { authClient } from '../auth';
 import { buildBackup, parseBackup, mergeImportToDb } from '../data/import';
 import backgroundUrl from '../assets/background.jpg';
 import logoSvg from '../assets/icon.svg';
+import { ListSelect } from './todosHub/ListSelect';
 
 type CountdownMode = 'off' | 'time' | 'percent';
 type Section = 'profile' | 'settings' | 'data';
@@ -314,14 +315,16 @@ const SettingsPane: React.FC<{
 
         <div className="space-y-1.5">
           <span className={labelCls}>Deadline countdown</span>
-          <Segment
-            options={[
-              { value: 'off' as CountdownMode, label: 'Off' },
-              { value: 'time' as CountdownMode, label: 'Time Left' },
-              { value: 'percent' as CountdownMode, label: 'Percent Left' },
-            ]}
+          <ListSelect
+            ariaLabel="Deadline countdown"
+            className="w-full"
             value={countdownMode}
-            onChange={onUpdateCountdownMode}
+            onChange={(v) => onUpdateCountdownMode(v as CountdownMode)}
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'time', label: 'Time Left' },
+              { value: 'percent', label: 'Percent Left' },
+            ]}
           />
         </div>
 
