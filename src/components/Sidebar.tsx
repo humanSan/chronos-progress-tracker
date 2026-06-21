@@ -86,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isVi
           <img
             src={logoSvg}
             alt="Account"
-            className={`relative w-5 h-5 text-black transition-opacity ${
+            className={`relative w-5.5 h-5.5 text-black transition-opacity ${
               isAuthenticated ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
             }`}
           />
