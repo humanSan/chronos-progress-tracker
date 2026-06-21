@@ -311,6 +311,8 @@ export default function App() {
   ): string => {
     const maxOrder = todos.reduce((m, t) => Math.max(m, t?.hubOrder ?? 0), 0);
     const id = Math.random().toString(36).substr(2, 9);
+    // An explicit group-create date wins over anything in the patch (e.g. a date
+    // filter); when none is given we keep whatever dueDate the patch carries.
     const dueDate = opts?.date && opts.date !== UNDATED ? opts.date : undefined;
     const newTodo: Todo = {
       id,
@@ -323,13 +325,13 @@ export default function App() {
       createdAt: Date.now(),
       status: "todo",
       ...(opts?.patch ?? {}),
-      dueDate,
+      ...(dueDate !== undefined ? { dueDate } : {}),
     };
     createTodo.mutate(newTodo);
     return id;
   };
-  const handleHubAddTodo = (opts?: { date?: string | null; patch?: Partial<Todo> }): string =>
-    addHubTodo(null, opts);
+  const handleHubAddTodo = (opts?: { date?: string | null; patch?: Partial<Todo>; parentId?: string | null }): string =>
+    addHubTodo(opts?.parentId ?? null, opts);
   const handleAddSubtask = (parentId: string): string => addHubTodo(parentId);
 
   // Create a collection with the given name (workspace-scoped), nested under
