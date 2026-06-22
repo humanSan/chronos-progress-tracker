@@ -15,7 +15,7 @@ A full-stack productivity app that combines a **Notion-style task planner**, a f
 [![Postgres](https://img.shields.io/badge/Neon_Postgres-008000?logo=postgresql&logoColor=white&style=for-the-badge)](https://neon.tech)
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-06B6D4?logo=tailwindcss&logoColor=white&style=for-the-badge)](https://tailwindcss.com)
 
-**[✨ Go to App]()** · **[Features](#-features)** · **[Screenshots](#-screenshots)** · **[Technical](#-technical)**
+**[✨ Go to App](https://dunzo-todo.vercel.app/)** · **[Features](#-features)** · **[Screenshots](#-screenshots)** · **[Technical](#technical)**
 
 </div>
 
@@ -66,7 +66,7 @@ You can also see charts of your XP over time, broken down by collection, so you 
 <img src="src/assets/screenshots/planner2.png" alt="Task Planner - Notion-style table view" width="100%" />
 
 You can change grouping mode, set filters/sorts, and control field visibility and order:
-
+<br>
 <img src="src/assets/screenshots/groupbystatus-fields.png" alt="Task Planner with group by status and fields menu" width="100%" />
 
 NOTE: List View and Timeline View are currently work in progress
@@ -88,7 +88,7 @@ NOTE: List View and Timeline View are currently work in progress
 
 </div>
 
-<div align="center">
+<div id="technical" align="center">
 
 ## 🛠️ Technical
 
