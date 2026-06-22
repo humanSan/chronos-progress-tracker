@@ -18,6 +18,7 @@ import { ActiveTodoTracker } from './components/ActiveTodoTracker';
 import { StopwatchWidget, TimerState } from './components/StopwatchWidget';
 import { StopwatchFullscreen } from './components/StopwatchFullscreen';
 import { authClient } from "./auth"
+import { queryClient } from './data/queryClient';
 import { useTodos, useCreateTodo, useUpdateTodo, useDeleteTodo, useBatchTodos } from './data/todos';
 import { useTrackers, useCreateTracker, useUpdateTracker, useDeleteTracker } from './data/trackers';
 import { useWorkspaces, useCreateWorkspace, useRenameWorkspace } from './data/workspaces';
@@ -67,6 +68,20 @@ export default function App() {
   const authSession = authClient.useSession();
   const sessionPending = authSession.isPending;
   const isAuthenticated = !!authSession.data;
+
+  // Defense in depth against cross-account data leaks: whenever the signed-in
+  // user identity changes (sign-in, sign-out, or token swap from another tab),
+  // drop the entire query cache so no resident data from the previous user can
+  // be served under the global (non-user-scoped) query keys. The logout handler
+  // also clears explicitly, but this catches every session transition.
+  const userId = authSession.data?.user?.id;
+  const prevUserId = useRef(userId);
+  useEffect(() => {
+    if (prevUserId.current !== userId) {
+      queryClient.clear();
+      prevUserId.current = userId;
+    }
+  }, [userId]);
 
   // ── Server data (TanStack Query); fetched once authenticated ───────────────
   const todosQuery = useTodos(isAuthenticated);
@@ -697,6 +712,9 @@ export default function App() {
         name={authSession.data?.user?.name}
         onLogout={async () => {
           await authClient.signOut();
+          // Evict all cached data so the previous account's todos/trackers/etc.
+          // can never be shown to the next account that signs in.
+          queryClient.clear();
           setIsAccountModalOpen(false);
         }}
         weekStartsOn={weekStartsOn}
