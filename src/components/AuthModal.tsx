@@ -10,19 +10,28 @@ interface AuthModalProps {
   onAuthenticated: () => void;
 }
 
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'login' | 'signup' | 'forgot' | 'reset';
+
+function getResetToken(): string | null {
+  return new URLSearchParams(window.location.search).get('token');
+}
 
 // ─── Signed-out view (full-screen login gate) ────────────────────────────────
 
 const LoginScreen: React.FC<{
   onAuthenticated: () => void;
 }> = ({ onAuthenticated }) => {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const resetToken = getResetToken();
+  const [mode, setMode] = useState<AuthMode>(resetToken ? 'reset' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +57,54 @@ const LoginScreen: React.FC<{
     }
   };
 
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { error } = await (authClient as any).requestPasswordReset({
+        email,
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) throw new Error(error.message || 'Could not send reset email');
+      setForgotSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const token = getResetToken();
+      const { error } = await (authClient as any).resetPassword({
+        newPassword: password,
+        token: token ?? undefined,
+      });
+      if (error) throw new Error(error.message || 'Could not reset password');
+      // Clear the token from URL without a page reload
+      window.history.replaceState({}, '', window.location.pathname);
+      setResetDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const switchMode = (m: AuthMode) => {
     setMode(m);
     setError(null);
+    setForgotSent(false);
+    setResetDone(false);
   };
 
   // Login-specific field styling (kept local so the account modal is unaffected).
@@ -58,6 +112,228 @@ const LoginScreen: React.FC<{
     'w-full bg-white/5 border border-white/10 rounded-lg px-4 h-9 text-white text-sm focus:outline-none focus:border-[var(--accent1)] transition-colors';
   const fieldLabel =
     'block text-sm font-medium text-white/80';
+
+  const renderForm = () => {
+    // ── Forgot password ──────────────────────────────────────────────────────
+    if (mode === 'forgot') {
+      if (forgotSent) {
+        return (
+          <>
+            <h2 className="text-2xl md:text-[28px] font-bold text-white mb-3">Check your email</h2>
+            <p className="text-sm text-white/60 mb-6">
+              We sent a password reset link to <span className="text-white/90">{email}</span>.
+              Check your inbox and follow the link to set a new password.
+            </p>
+            <p className="text-sm text-white/80">
+              <button
+                type="button"
+                onClick={() => switchMode('login')}
+                className="font-bold text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
+              >
+                Back to log in
+              </button>
+            </p>
+          </>
+        );
+      }
+      return (
+        <>
+          <h2 className="text-2xl md:text-[28px] font-bold text-white mb-2">Reset your password</h2>
+          <p className="text-sm text-white/60 mb-5">
+            Enter your email and we'll send you a link to reset your password.
+          </p>
+          <form onSubmit={handleForgotSubmit} className="space-y-3.5">
+            <div>
+              <label className={`${fieldLabel} mb-1.5`}>Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={fieldClass}
+                placeholder="you@example.com"
+                autoFocus
+              />
+            </div>
+            {error && (
+              <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold h-9 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {submitting ? 'Sending…' : 'Send Reset Link'}
+            </button>
+          </form>
+          <p className="text-sm text-white/80 mt-5">
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              className="font-bold text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
+            >
+              Back to log in
+            </button>
+          </p>
+        </>
+      );
+    }
+
+    // ── Reset password (from email link) ─────────────────────────────────────
+    if (mode === 'reset') {
+      if (resetDone) {
+        return (
+          <>
+            <h2 className="text-2xl md:text-[28px] font-bold text-white mb-3">Password updated</h2>
+            <p className="text-sm text-white/60 mb-6">
+              Your password has been changed. You can now log in with your new password.
+            </p>
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold h-9 rounded-lg transition-all active:scale-[0.98] cursor-pointer"
+            >
+              Log In
+            </button>
+          </>
+        );
+      }
+      return (
+        <>
+          <h2 className="text-2xl md:text-[28px] font-bold text-white mb-6">Set new password</h2>
+          <form onSubmit={handleResetSubmit} className="space-y-3.5">
+            <div>
+              <label className={`${fieldLabel} mb-1.5`}>New password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${fieldClass} pr-11`}
+                  placeholder="••••••••"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className={`${fieldLabel} mb-1.5`}>Confirm password</label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={`${fieldClass} pr-11`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold h-9 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {submitting ? 'Saving…' : 'Set Password'}
+            </button>
+          </form>
+        </>
+      );
+    }
+
+    // ── Login / Signup ───────────────────────────────────────────────────────
+    return (
+      <>
+        <h2 className="text-2xl md:text-[28px] font-bold text-white mb-6">
+          {mode === 'login' ? 'Log in to Dunzo' : 'Sign up for Dunzo'}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          <div>
+            <label className={`${fieldLabel} mb-1.5`}>Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={fieldClass}
+              placeholder="you@example.com"
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`${fieldLabel}`}>Password</label>
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
+                  onClick={() => switchMode('forgot')}
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${fieldClass} pr-11`}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
+          )}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold h-9 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {submitting ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Create Account'}
+          </button>
+        </form>
+        <p className="text-sm text-white/80 mt-5">
+          {mode === 'login' ? 'New to Dunzo? ' : 'Already have an account? '}
+          <button
+            type="button"
+            onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+            className="font-bold text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
+          >
+            {mode === 'login' ? 'Create an account' : 'Log in'}
+          </button>
+        </p>
+      </>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -95,83 +371,7 @@ const LoginScreen: React.FC<{
           >
             {/* Content block: constrained + centered inside the visual block */}
             <div className="w-full md:w-90 md:px-8 md:py-10">
-              <h2 className="text-2xl md:text-[28px] font-bold text-white mb-6">
-                {mode === 'login' ? 'Log in to Dunzo' : 'Sign up for Dunzo'}
-              </h2>
-
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                <div>
-                  <label className={`${fieldLabel} mb-1.5`}>Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={fieldClass}
-                    placeholder="you@example.com"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className={`${fieldLabel}`}>Password</label>
-                    {mode === 'login' && (
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
-                        onClick={() => console.log('[auth stub] forgot password')}
-                      >
-                        Forgot?
-                      </button>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`${fieldClass} pr-11`}
-                      placeholder="••••••••"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((s) => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-[var(--accent1)] hover:opacity-90 text-black font-bold h-9 rounded-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {submitting
-                    ? 'Please wait…'
-                    : mode === 'login'
-                    ? 'Log In'
-                    : 'Create Account'}
-                </button>
-              </form>
-
-              <p className="text-sm text-white/80 mt-5">
-                {mode === 'login' ? 'New to Dunzo? ' : 'Already have an account? '}
-                <button
-                  type="button"
-                  onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-                  className="font-bold text-[var(--accent2)] hover:text-[var(--accent1)] transition-colors cursor-pointer"
-                >
-                  {mode === 'login' ? 'Create an account' : 'Log in'}
-                </button>
-              </p>
+              {renderForm()}
             </div>
           </motion.div>
         </div>
