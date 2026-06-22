@@ -24,7 +24,7 @@ import { useCollectionDnD } from './todosHub/useCollectionDnD';
 import { useRowDnD } from './todosHub/useRowDnD';
 import { HubSidebar } from './todosHub/HubSidebar';
 import { HubToolbar, ToolbarMenuKey } from './todosHub/HubToolbar';
-import { groupCreateSpec } from './todosHub/viewUtils';
+import { groupCreateSpec, buildFilterCreatePatch } from './todosHub/viewUtils';
 import { isDone } from '../utils/todoStatus';
 import { HubRow } from './todosHub/HubRow';
 import { FieldsMenu } from './todosHub/FieldsMenu';
@@ -47,10 +47,11 @@ interface TodosHubViewProps {
   // Save an edited todo. The task owns its scheduled day via `dueDate`, so the
   // updated todo is the entire payload.
   onSaveTodo: (updatedTodo: Todo) => void;
-  // Create a top-level hub task. `opts` lets a grouped-view "+" seed the task
-  // with a calendar date and/or field patch (status/priority) so it lands in the
-  // section it was added from.
-  onAddTodo: (opts?: { date?: string | null; patch?: Partial<Todo> }) => string;
+  // Create a hub task. `opts` lets a grouped-view "+" seed the task with a calendar
+  // date and/or field patch (status/priority) so it lands in the section it was
+  // added from, and `parentId` parents it to a collection so it inherits the
+  // selected collection / active filters of the current view.
+  onAddTodo: (opts?: { date?: string | null; patch?: Partial<Todo>; parentId?: string | null }) => string;
   onAddSubtask: (parentId: string) => string;
   // Create a fresh collection (top-level, or nested when a parentId is given);
   // returns its id for select + rename.
@@ -396,28 +397,44 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
     onAddCollection(parentId);
     setCollapsedColls((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
   };
-  // The table's "New" button adds into the selected collection, else top-level,
-  // then drops straight into the new row's title field so you can type the name
-  // without a second click.
+  // Seed patch derived from the view's active filters: any "is <value>" filter is
+  // pre-applied to tasks created in this view, so a new task still satisfies the
+  // filters (and stays visible) right after creation. Collection membership is
+  // handled separately via `selectedCollectionId` as the new task's parent.
+  const inheritedFilterPatch = useMemo(
+    () => buildFilterCreatePatch(activeFilters),
+    [activeFilters]
+  );
+
+  // The table's "New" button adds into the selected collection (else top-level),
+  // inherits the active filters, then drops straight into the new row's title
+  // field so you can type the name without a second click.
   const handleNewInView = () => {
-    const id = selectedCollectionId ? onAddSubtask(selectedCollectionId) : onAddTodo();
+    const id = onAddTodo({ parentId: selectedCollectionId, patch: inheritedFilterPatch });
     if (selectedCollectionId) {
       // Make sure the parent isn't collapsed, or the new row would be hidden.
       setCollapsed((prev) => { const n = new Set(prev); n.delete(selectedCollectionId); return n; });
     }
     setEditing({ id, col: 'title', rect: null });
   };
+  // The "+" on a collection section header (collection grouping): parent the task
+  // to that collection and seed the active filters so it stays in the filtered view.
   const handleQuickAddTask = useStableCallback((parentId: string) => {
-    const id = onAddSubtask(parentId);
+    const id = onAddTodo({ parentId, patch: inheritedFilterPatch });
     setCollapsed((prev) => { const n = new Set(prev); n.delete(parentId); return n; });
     setEditing({ id, col: 'title', rect: null });
   });
   // The "+" on an attribute-grouped section header: create a task seeded with the
-  // section's attribute (so it lands in that section), expand the section if it
-  // was collapsed, and drop into the new row's title field.
+  // active filters AND the section's attribute (the latter wins on conflict so it
+  // lands in that section), parent it to the selected collection so a collection
+  // view keeps it, expand the section if collapsed, and focus the new row's title.
   const handleQuickAddInGroup = useStableCallback((groupValue: string) => {
     const { date, patch } = groupCreateSpec(sectionsConfig.groupBy, groupValue);
-    const id = onAddTodo({ date, patch });
+    const id = onAddTodo({
+      date,
+      patch: { ...inheritedFilterPatch, ...patch },
+      parentId: selectedCollectionId,
+    });
     const headerId = `__grp:${sectionsConfig.groupBy}:${groupValue}`;
     setCollapsed((prev) => { const n = new Set(prev); n.delete(headerId); return n; });
     setEditing({ id, col: 'title', rect: null });

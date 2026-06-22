@@ -1,4 +1,4 @@
-import { format, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
+import { format, parse, parseISO, differenceInCalendarDays, addDays } from 'date-fns';
 import { OrganizerEntry, collectionOf, collectionPath } from '../../utils/todoFilters';
 import { Todo, TodoStatus, TodoPriority } from '../../types';
 import { formatTime12h, formatMinutes } from '../../utils/timeUtils';
@@ -197,6 +197,51 @@ export function groupCreateSpec(
     return { date: format(addDays(parseISO(todayStr), bucket.startOffset), 'yyyy-MM-dd'), patch: {} };
   }
   return { date: null, patch: groupAssignmentPatch(field, value) ?? {} };
+}
+
+// Parse a display-formatted date ("MMM d, yyyy", what getFieldDisplayValue emits)
+// back into the canonical yyyy-MM-dd storage form. Returns null if it doesn't parse.
+function parseDisplayDate(value: string): string | null {
+  try {
+    const d = parse(value, 'MMM d, yyyy', new Date());
+    return isNaN(d.getTime()) ? null : format(d, 'yyyy-MM-dd');
+  } catch {
+    return null;
+  }
+}
+
+// Build the Todo patch that pre-seeds a newly created task with the values of the
+// active filters, so a task created inside a filtered view still satisfies those
+// filters (and stays visible) right after creation. Only equality ("is") filters on
+// settable fields seed a value — "is not"/"contains"/range conditions and unset
+// values can't be turned into a single concrete value and are skipped. Collection
+// membership is handled separately (via the task's parent), not here.
+export function buildFilterCreatePatch(filters: FilterRule[]): Partial<Todo> {
+  const patch: Partial<Todo> = {};
+  for (const rule of filters) {
+    if (rule.condition !== 'is' || !rule.value) continue;
+    switch (rule.field) {
+      case 'priority':
+      case 'status': {
+        const p = groupAssignmentPatch(rule.field, rule.value);
+        if (p) Object.assign(patch, p);
+        break;
+      }
+      case 'date': {
+        const iso = parseDisplayDate(rule.value);
+        if (iso) patch.dueDate = iso;
+        break;
+      }
+      case 'startDate': {
+        const iso = parseDisplayDate(rule.value);
+        if (iso) patch.startDate = iso;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return patch;
 }
 
 // Build the flat list of rows for the grouped rendering mode.

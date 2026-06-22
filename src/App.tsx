@@ -4,7 +4,7 @@ import { Plus, Clock, LayoutGrid, List, Maximize2, Minimize2 } from 'lucide-reac
 import { Tracker, Theme, DayTodos, Todo, Workspace } from './types';
 import { TrackerCard } from './components/TrackerCard';
 import { AddTrackerModal } from './components/AddTrackerModal';
-import { SettingsModal } from './components/SettingsModal';
+import { AccountModal } from './components/AccountModal';
 import { AuthModal } from './components/AuthModal';
 import { Sidebar } from './components/Sidebar';
 import { TodoView } from './components/TodoView';
@@ -50,8 +50,7 @@ export default function App() {
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   // Real Neon Auth session. The app is gated on this (see render below): server
   // data loads only once authenticated.
   const authSession = authClient.useSession();
@@ -312,6 +311,8 @@ export default function App() {
   ): string => {
     const maxOrder = todos.reduce((m, t) => Math.max(m, t?.hubOrder ?? 0), 0);
     const id = Math.random().toString(36).substr(2, 9);
+    // An explicit group-create date wins over anything in the patch (e.g. a date
+    // filter); when none is given we keep whatever dueDate the patch carries.
     const dueDate = opts?.date && opts.date !== UNDATED ? opts.date : undefined;
     const newTodo: Todo = {
       id,
@@ -324,13 +325,13 @@ export default function App() {
       createdAt: Date.now(),
       status: "todo",
       ...(opts?.patch ?? {}),
-      dueDate,
+      ...(dueDate !== undefined ? { dueDate } : {}),
     };
     createTodo.mutate(newTodo);
     return id;
   };
-  const handleHubAddTodo = (opts?: { date?: string | null; patch?: Partial<Todo> }): string =>
-    addHubTodo(null, opts);
+  const handleHubAddTodo = (opts?: { date?: string | null; patch?: Partial<Todo>; parentId?: string | null }): string =>
+    addHubTodo(opts?.parentId ?? null, opts);
   const handleAddSubtask = (parentId: string): string => addHubTodo(parentId);
 
   // Create a collection with the given name (workspace-scoped), nested under
@@ -437,16 +438,10 @@ export default function App() {
     );
   }
   if (!isAuthenticated) {
-    // Forced sign-in gate (the modal renders its own full-screen backdrop).
+    // Forced sign-in gate (the screen renders its own full-screen background).
     return (
       <div className="h-screen bg-neutral-950">
-        <AuthModal
-          isOpen
-          onClose={() => {}}
-          isAuthenticated={false}
-          onAuthenticated={() => {}}
-          onLogout={() => {}}
-        />
+        <AuthModal isOpen onAuthenticated={() => {}} />
       </div>
     );
   }
@@ -482,8 +477,7 @@ export default function App() {
         onViewChange={handleViewChange}
         isVisible={!isFullscreen && !isStopwatchFullscreen}
         isAuthenticated={isAuthenticated}
-        onAccountClick={() => setIsAuthModalOpen(true)}
-        onSettingsClick={() => setIsSettingsModalOpen(true)}
+        onAccountClick={() => setIsAccountModalOpen(true)}
         onStopwatchClick={() => setIsStopwatchVisible(v => !v)}
         isStopwatchActive={timerState !== 'idle'}
       />
@@ -686,9 +680,15 @@ export default function App() {
         editingTracker={editingTracker}
       />
 
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+      <AccountModal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        email={authSession.data?.user?.email}
+        name={authSession.data?.user?.name}
+        onLogout={async () => {
+          await authClient.signOut();
+          setIsAccountModalOpen(false);
+        }}
         weekStartsOn={weekStartsOn}
         onUpdateWeekStartsOn={setWeekStartsOn}
         countdownMode={countdownMode}
@@ -697,21 +697,6 @@ export default function App() {
         onUpdateXpEnabled={setXpEnabled}
         theme={theme}
         onUpdateTheme={setTheme}
-      />
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        isAuthenticated={isAuthenticated}
-        onAuthenticated={() => {
-          // Sign-in/up happens inside the modal via authClient; the useSession
-          // hook reflects the new state. Just close.
-          setIsAuthModalOpen(false);
-        }}
-        onLogout={async () => {
-          await authClient.signOut();
-          setIsAuthModalOpen(false);
-        }}
       />
 
       {/* Stopwatch Widget */}
