@@ -5,6 +5,7 @@ import {
   addDays,
   startOfWeek,
   isSameDay,
+  isSameWeek,
   parseISO,
   eachDayOfInterval,
   endOfWeek
@@ -194,8 +195,16 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     const current = parseISO(selectedDate);
-    const next = addDays(current, direction === 'prev' ? -7 : 7);
-    setSelectedDate(format(next, 'yyyy-MM-dd'));
+    const wso = weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    // Land on the near edge of the adjacent week (start of next / end of prev)
+    // so a single press feels like stepping to the next sequential day.
+    const target = direction === 'next'
+      ? startOfWeek(addDays(current, 7), { weekStartsOn: wso })
+      : endOfWeek(addDays(current, -7), { weekStartsOn: wso });
+    // If the landing week contains today, prefer today over the week's edge.
+    const today = new Date();
+    const landing = isSameWeek(today, target, { weekStartsOn: wso }) ? today : target;
+    setSelectedDate(format(landing, 'yyyy-MM-dd'));
   };
 
   return (
