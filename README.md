@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="src/assets/splashtop.png" alt="Dunzo logo" width="120" />
+<img src="src/assets/icon-invert2.png" alt="Dunzo logo" width="120" />
 
 # Dunzo
 
 ### Strategize, plan your day, see your time, and make progress feel like a game.
 
-A full-stack productivity app that combines a **Notion-style task planner**, a focused **daily checklist**, live **time-progress trackers**, and **XP & streak gamification** — all synced to the cloud across your devices.
+A full-stack productivity app that combines a **Notion-style task planner**, a focused **daily checklist**, live **time-progress trackers**, and **XP & streak gamification** - all synced to the cloud across your devices.
 
 <br/>
 
@@ -15,87 +15,75 @@ A full-stack productivity app that combines a **Notion-style task planner**, a f
 [![Postgres](https://img.shields.io/badge/Neon_Postgres-008000?logo=postgresql&logoColor=white&style=for-the-badge)](https://neon.tech)
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-06B6D4?logo=tailwindcss&logoColor=white&style=for-the-badge)](https://tailwindcss.com)
 
-**[✨ Go to App](#)** · **[Features](#-features)** · **[Screenshots](#-screenshots)** · **[For Contributors](#-for-developers)**
+**[✨ Go to App](#)** · **[Features](#-features)** · **[Screenshots](#-screenshots)** · **[Technical](#-technical)**
 
 </div>
 
----
 
 ## ✨ Why Dunzo?
 
-Most to-do apps make you choose: a rigid daily checklist *or* a powerful database-style planner. Dunzo gives you **both, on one shared set of tasks** — plan ahead in a flexible table, then work from a clean per-day list. And because finishing things should feel good, every completed task earns **XP**, builds a **streak**, and pushes you to beat yesterday.
+- 🗂️ **Plan like Notion** - a full table view with nesting, collections, grouping, and drag-and-drop.
+- ✅ **Work like a checklist** - a distraction-free daily list for what's due today.
+- ⏳ **Stay aware of time** - live widgets showing how much of the day, week, month, or year is left.
+- 🎮 **Stay motivated** - XP, daily goals, star ratings, and streaks built from your real history.
+- ☁️ **Everywhere you are** - multi-user, cloud-synced, with instant optimistic updates.
 
-- 🗂️ **Plan like Notion** — a full table view with nesting, collections, grouping, and drag-and-drop.
-- ✅ **Work like a checklist** — a distraction-free daily list for what's due today.
-- ⏳ **Stay aware of time** — live widgets showing how much of the day, week, month, or year is left.
-- 🎮 **Stay motivated** — XP, daily goals, star ratings, and streaks built from your real history.
-- ☁️ **Everywhere you are** — multi-user, cloud-synced, with instant optimistic updates.
-
----
 
 ## 🎯 Features
 
 ### 🗂️ Notion-style Task Planner
 A spreadsheet-style table of everything you're planning, with configurable columns (status, priority, urgency, dates, estimated time, XP, notes, collection), inline cell editing, resizable columns, saved views, and filtering & sorting.
 
-- **Unlimited nesting** — subtasks nest to any depth; deleting or archiving a parent cascades to its children.
-- **Custom drag-and-drop** — a hand-built engine (no library) lets you **reorder**, **nest**, and **regroup** in one gesture. Drop a task into a *Status* or *Priority* or *Date* group and it takes on that attribute; drop it onto another task and it becomes a subtask.
-- **Group by anything** — collection, status, priority, or smart date buckets (Today / Tomorrow / Next 7 Days / …), interactive in every mode.
-- **Collections & Workspaces** — organize tasks into nestable collections and split your life into independent workspaces (separate task databases).
+- **Unlimited nesting** - subtasks nest to any depth; deleting or archiving a parent cascades to its children.
+- **Custom drag-and-drop** - a hand-built engine (no library) lets you **reorder**, **nest**, and **regroup** in one gesture. Drop a task into a *Status* or *Priority* or *Date* group and it takes on that attribute; drop it onto another task and it becomes a subtask.
+- **Group by anything** - collection, status, priority, or smart date buckets (Today / Tomorrow / Next 7 Days / …), interactive in every mode.
+- **Collections & Workspaces** - organize tasks into nestable collections and split your life into independent workspaces (separate task databases).
 
 ### ✅ Daily Checklist
-A focused, per-day list of what's due — independent from the planner. A task can live in the planner only, the daily list only, or both, so big-picture planning and day-to-day execution never get in each other's way.
+A focused, per-day list of what's due - independent from the planner. A task can live in the planner only, the daily list only, or both, so big-picture planning and day-to-day execution stay separated and focused.
 
 ### 📅 Calendar
-See your tasks laid out by due date and time across the month or week.
+See your tasks laid out by due date and time across the week.
 
 ### ⏳ Time-Progress Trackers
-Live widgets that show how much of a **day, week, month, year**, or any **custom date range** has elapsed or remains — with configurable precision and display modes. Includes a stopwatch with a fullscreen focus mode.
+Live widgets that show how much of a **day, week, month, year**, or any **custom date range** has elapsed or remains - with customizable optoins. Includes a stopwatch with a fullscreen focus mode.
 
 ### 🎮 XP, Stars & Streaks
 Completing tasks earns XP, and Dunzo turns that into motivation:
-- **Progressive daily goals** — beat yesterday → beat your best of the last 7 days → beat your all-time best.
-- **Star ratings** — earn up to 3 stars a day for showing up, holding your average, and improving.
-- **Streaks** — a streak counter computed purely from your history, so it's always honest.
+- **Progressive daily goals** - beat yesterday → beat your best of the last 7 days → beat your all-time best.
+- **Star ratings and streak** - earn up to 3 stars a day for showing up, holding your average, and improving. Improvement increases your streak score.
 
-### 📊 Stats Dashboard
-Charts of your XP over time, broken down by collection, so you can see where your effort actually goes.
-
-### 🎨 Personal & Synced
-Customizable accent colors, week-start preference, full account export/import, and everything synced to the cloud and scoped to your account — with **optimistic updates** so the UI responds instantly and reconciles in the background.
-
----
+You can also see charts of your XP over time, broken down by collection, so you can see where your effort actually goes.
 
 ## 📸 Screenshots
 
-> 📷 _Screenshots live in [`src/assets/screenshots/`](src/assets/screenshots). Drop in the images named below and they'll render here automatically._
-
 <div align="center">
 
-### Task Planner & Daily Checklist
-<img src="src/assets/screenshots/planner.png" alt="Task Planner — Notion-style table view" width="800px" />
-
 ### Daily Checklist Dashboard
-<img src="src/assets/screenshots/daily.png" alt="Daily checklist" width="800px" />
+<img src="src/assets/screenshots/daily.png" alt="Daily checklist" width="100%" />
+
+### Task Planner
+<img src="src/assets/screenshots/planner2.png" alt="Task Planner - Notion-style table view" width="100%" />
+<img src="src/assets/screenshots/groupbystatus-fields.png" alt="Task Planner with group by status and fields menu" width="100%" />
+
+- Note: List View and Timeline View are currently work in progress
 
 ### Trackers & Calendar
-<img src="src/assets/screenshots/calendar.png" alt="Calendar view" width="32%" />
-<img src="src/assets/screenshots/trackers.png" alt="Time-progress trackers" width="32%" />
-<img src="src/assets/screenshots/widget-creator.png" alt="Tracker widget creator" width="32%" />
+<img src="src/assets/screenshots/calendar.png" alt="Calendar view" width="49%" />
+<img src="src/assets/screenshots/trackers.png" alt="Time-progress trackers" width="49%" />
+
 
 ### Stats & More
-<img src="src/assets/screenshots/stats.png" alt="Stats and XP dashboard" width="49%" />
-<img src="src/assets/screenshots/collection-breakdown.png" alt="Collection breakdown" width="49%" />
-<img src="src/assets/screenshots/groupbystatus-fields.png" alt="Task Planner with group by status and fields menu" width="49%" />
+<img src="src/assets/screenshots/stats.png" alt="Stats and XP dashboard" height="32%" />
+
+<img src="src/assets/screenshots/collection-breakdown.png" alt="Collection breakdown" width="32%" />
 <img src="src/assets/screenshots/data-options.png" alt="Stats and XP dashboard" width="49%" />
 
 </div>
 
----
-
 <div align="center">
 
-## 🛠️ For Developers
+## 🛠️ Technical
 
 _Everything below is the technical deep-dive: architecture, data model, setup, and API._
 
@@ -145,7 +133,7 @@ server/app.ts exports a Express app used both by the local dev server (server/in
 
 The core entity is the `Todo` (see [`src/types.ts`](src/types.ts) and [`src/db/schema.ts`](src/db/schema.ts)):
 
-- **Flat list, derived days.** Todos are stored as a flat array; each task owns its scheduled day via `dueDate`. Day-grouped views (daily list, calendar, stats) are derived in memory — there are no per-day buckets in storage.
+- **Flat list, derived days.** Todos are stored as a flat array; each task owns its scheduled day via `dueDate`. Day-grouped views (daily list, calendar, stats) are derived in memory - there are no per-day buckets in storage.
 - **Two visibility flags.** `showInDatabase` controls Task Planner visibility; `showInDailyList` (+ a `dueDate`) controls the daily checklist. They're independent, so a task can appear in one, the other, or both.
 - **Self-referential tree.** `parentId` enables unlimited nesting. An `isCollection` node is a folder-like grouping header; a task's collection is its nearest collection ancestor.
 - **Status is the source of truth for completion.** `status` (`todo` / `in_progress` / `completed`) drives the derived `completed` column; there is no separate boolean to drift.
@@ -161,12 +149,12 @@ Tables: `workspaces`, `todos`, `trackers`, `user_settings` (one row per user; co
 # 1. Install
 npm install
 
-# 2. Configure — create a .env in the project root (see below)
+# 2. Configure - create a .env in the project root (see below)
 
 # 3. Set up the database
 npm run db:push        # push the Drizzle schema to Neon
 # or use generated SQL migrations:
-#   npm run db:generate && npm run db:migrate
+# npm run db:generate && npm run db:migrate
 
 # 4. Run (frontend + backend together)
 npm run dev
@@ -216,7 +204,7 @@ All routes are under `/api` and (except health) require a `Bearer` JWT; every qu
 | `POST` | `/api/todos` | Create a todo (client-generated id). |
 | `PATCH` | `/api/todos/:id` | Partial update. |
 | `DELETE` | `/api/todos/:id` | Hard delete (FK cascade removes the subtree). |
-| `POST` | `/api/todos/batch` | Transactional `{ upserts, patches, deletes }` — reorder, nesting, collection promote. |
+| `POST` | `/api/todos/batch` | Transactional `{ upserts, patches, deletes }` - reorder, nesting, collection promote. |
 | `GET/POST/PATCH/DELETE` | `/api/workspaces[/:id]` | Workspace CRUD. |
 | `GET/POST/PATCH/DELETE` | `/api/trackers[/:id]` | Tracker CRUD. |
 | `GET` / `PUT` | `/api/settings` | Read / upsert the user's settings (per-field merge). |
@@ -234,7 +222,7 @@ src/
   db/schema.ts          # Drizzle schema (shared with the server)
   utils/                # todoFilters, todoStatus, xpUtils, timeUtils
 server/
-  app.ts                # Express app (no listen — shared by dev + serverless)
+  app.ts                # Express app (no listen - shared by dev + serverless)
   index.ts              # Local dev entry point
   auth.ts               # JWT/JWKS verification, requireAuth
   db.ts                 # Drizzle runtime (Neon serverless pool)
