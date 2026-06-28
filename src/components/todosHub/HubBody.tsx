@@ -149,6 +149,7 @@ export const HubBody: React.FC<HubBodyProps> = ({
             key={row.id}
             row={row}
             gridTemplateColumns={effectiveGrid}
+            listView={listView}
             onToggleCollapse={toggleCollapse}
             onAddTask={handleQuickAddInGroup}
             isDropTarget={rowDrop?.id === row.id}
