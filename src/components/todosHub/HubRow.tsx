@@ -14,6 +14,7 @@ import {
 } from '../todoFields';
 import { ColDef, ColKey, EditState, FlatNode, NAME_COL_KEY } from './types';
 import { INDENT, NAME_BASE_PAD, DEFAULT_COLLECTION_COLOR, pillTextColor, cellEditCls } from './constants';
+import { SectionHeader } from './SectionHeader';
 import { isDone } from '../../utils/todoStatus';
 
 // Where the dragged row will land relative to this row: a line before/after it
@@ -176,98 +177,70 @@ const HubRowImpl: React.FC<HubRowProps> = ({
   };
 
   // ── Collection row ──────────────────────────────────────────────────────────
-  // A section header, not a task: full-width (no column cells / dividers), taller,
-  // no checkbox, with the name as a bottom-anchored colored pill.
+  // A section header, not a task: rendered through the shared SectionHeader shell
+  // (same chrome/spacing as attribute-group headers) with the collection-specific
+  // bits — inline-rename pill, drag handle, options + add buttons — passed in.
   if (todo.isCollection) {
     const color = todo.color || DEFAULT_COLLECTION_COLOR;
     return (
-      <div
-        style={style}
-        {...dropProps}
-        onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
-        className={`relative grid items-end border-white/8 group/row ${
-          listView ? 'min-h-14 pt-10 border-b-0' : 'min-h-12 pt-4 border-b'
-        } ${isDragSource && 'opacity-50'}`}
-      >
-        {dropLine('before')}
-        {dropLine('after')}
-        {insideOverlay}
-        {/* Header group, pinned to the left so it stays visible while scrolling.
-            Indents by nesting depth so sub-collections sit under their parent. */}
-        <div
-          ref={dragImageRef}
-          style={{ paddingLeft: NAME_BASE_PAD + displayDepth * INDENT }}
-          className="sticky grid-col-200 left-0 z-20 flex items-center h-full min-w-0 overflow-hidden bg-[#0a0a0a]"
-        >
-          {hasChildren ? (
+      <SectionHeader
+        listView={listView}
+        gridTemplateColumns={gridTemplateColumns}
+        color={color}
+        label={todo.text || 'Untitled collection'}
+        onPillClick={(e) => startEdit(todo.id, 'title', e)}
+        pillOverride={isEditing('title') ? (
+          <input
+            type="text"
+            autoFocus
+            defaultValue={todo.text}
+            onChange={(e) => saveField({ text: e.target.value })}
+            onBlur={stopEdit}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            placeholder="Collection name"
+            size={1}
+            style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
+            className="w-auto min-w-0 max-w-full field-sizing-content rounded-full px-2.5 py-px text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
+          />
+        ) : undefined}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => onToggleCollapse(todo.id)}
+        hasToggle={hasChildren}
+        toggleTitle={{ expand: 'Expand collection', collapse: 'Collapse collection' }}
+        count={taskCount}
+        depth={displayDepth}
+        leading={dragHandle('mr-1')}
+        actions={
+          <>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse(todo.id); }}
-              className="shrink-0 p-0.5 flex items-center justify-center rounded text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
-              title={isCollapsed ? 'Expand collection' : 'Collapse collection'}
+              title="Options"
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                openMenu(todo.id, r.left, r.bottom + 4);
+              }}
+              className="shrink-0 mr-0.5 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
             >
-              {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+              <MoreHorizontal size={18} />
             </button>
-          ) : (
-            <span className="shrink-0 w-5.5" />
-          )}
-
-          {dragHandle('mr-1')}
-
-          {isEditing('title') ? (
-            <input
-              type="text"
-              autoFocus
-              defaultValue={todo.text}
-              onChange={(e) => saveField({ text: e.target.value })}
-              onBlur={stopEdit}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              placeholder="Collection name"
-              size={1}
-              style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className="w-auto min-w-0 max-w-full field-sizing-content rounded-full px-2.5 py-px text-sm font-medium focus:outline-none placeholder:text-white/40 ring-1 ring-current/60"
-            />
-          ) : (
-            <span
-              onClick={(e) => startEdit(todo.id, 'title', e)}
-              style={{ backgroundColor: `${color}40`, color: pillTextColor(color) }}
-              className={`min-w-0 max-w-full truncate rounded-full px-2.5 py-px font-medium cursor-text ${
-                listView ? 'text-base' : 'text-sm'
-              }`}
+            <button
+              type="button"
+              title="Add task"
+              onClick={() => { onQuickAddTask ? onQuickAddTask(todo.id) : onAddSubtask(todo.id); }}
+              className="shrink-0 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
             >
-              {todo.text || 'Untitled collection'}
-            </span>
-          )}
-
-          {taskCount !== undefined && (
-            <span className="shrink-0 text-xs px-1.5 text-white/40 font-mono">{taskCount}</span>
-          )}
-
-          <button
-            type="button"
-            title="Options"
-            onClick={(e) => {
-              e.stopPropagation();
-              const r = e.currentTarget.getBoundingClientRect();
-              openMenu(todo.id, r.left, r.bottom + 4);
-            }}
-            className="shrink-0 mr-0.5 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
-          >
-            <MoreHorizontal size={18} />
-          </button>
-
-          <button
-            type="button"
-            title="Add task"
-            onClick={() => {
-              onQuickAddTask ? onQuickAddTask(todo.id) : onAddSubtask(todo.id);
-            }}
-            className="shrink-0 p-0.5 rounded text-white/50 hover:text-white hover:bg-white/10 opacity-0 group-hover/row:opacity-100 transition-all"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-      </div>
+              <Plus size={18} />
+            </button>
+          </>
+        }
+        dropDecorations={<>{dropLine('before')}{dropLine('after')}{insideOverlay}</>}
+        isDragSource={isDragSource}
+        dragImageRef={dragImageRef}
+        onContextMenu={(e) => { e.preventDefault(); openMenu(todo.id, e.clientX, e.clientY); }}
+        onDragOver={dropProps.onDragOver}
+        onDrop={dropProps.onDrop}
+      />
     );
   }
 
