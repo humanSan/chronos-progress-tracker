@@ -122,6 +122,11 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
   const selectedView = layout.selectedView ?? 'all';
   const setSelectedView = (v: string) => patchLayout(() => ({ selectedView: v }));
 
+  // Which view renders the data: the spreadsheet-style table (default) or the
+  // Todoist-style single-column list. A global UI preference (like selectedView).
+  const viewMode: 'table' | 'list' = layout.viewMode ?? 'table';
+  const setViewMode = (m: 'table' | 'list') => patchLayout(() => ({ viewMode: m }));
+
   // Per-view layout + column widths (field order/visibility, filters, sorts,
   // section settings, resizable columns) — keyed by workspace + view.
   const {
@@ -558,6 +563,8 @@ export const TodosHubView: React.FC<TodosHubViewProps> = ({
         <HubToolbar
           sidebarHidden={sidebarHidden}
           onToggleSidebar={() => setSidebarHidden((v) => !v)}
+          viewMode={viewMode}
+          onSetViewMode={setViewMode}
           selectedCollectionId={selectedCollectionId}
           todoById={todoById}
           viewLabel={viewLabel}
