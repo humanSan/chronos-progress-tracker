@@ -91,6 +91,9 @@ const HubRowImpl: React.FC<HubRowProps> = ({
   // The name cell doubles as the drag image so the cursor carries a readable chip.
   const dragImageRef = useRef<HTMLDivElement>(null);
   const style: React.CSSProperties = { gridTemplateColumns };
+  // List view always wraps the title (there's only the one column to read), so
+  // the per-column wrap setting only governs the title in table view.
+  const titleWrapped = listView || wrappedFields.has('title');
 
   const isEditing = (col: ColKey) => editing?.id === todo.id && editing?.col === col;
   const saveField = (patch: Partial<Todo>) => onSaveTodo({ ...todo, ...patch });
@@ -449,8 +452,8 @@ const HubRowImpl: React.FC<HubRowProps> = ({
             */}
         <div
           style={{ paddingLeft: NAME_BASE_PAD + displayDepth * INDENT }}
-          className={`flex min-w-0 flex-1 ${wrappedFields.has('title') ? 'items-start' : 'items-center'} ${
-            isEditing('title') && !wrappedFields.has('title') ? 'h-9' : 'py-[8px]'
+          className={`flex min-w-0 flex-1 ${titleWrapped ? 'items-start' : 'items-center'} ${
+            isEditing('title') && !titleWrapped ? 'h-9' : 'py-[8px]'
           } ${isEditing('title') && "ring-1 ring-inset ring-[var(--accent2)]/60"}
           `}
         > 
@@ -472,7 +475,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
           <CompletedToggle completed={isDone(todo)} onToggle={() => onToggleTodo(todo.id)} size={18} className='mr-1 ml-1 h-5 flex items-center justify-center'/>
 
           {isEditing('title') ? (
-            wrappedFields.has('title') ? (
+            titleWrapped ? (
               // Wrapped column → multi-line editor that grows with content, so the
               // text keeps the same wrapping/styling it had as a display cell.
               <textarea
@@ -501,7 +504,7 @@ const HubRowImpl: React.FC<HubRowProps> = ({
             <>
               <span
                 onClick={(e) => startEdit(todo.id, 'title', e)}
-                className={`flex-1 min-w-0 pl-1 text-sm cursor-text ${wrappedFields.has('title') ? 'break-words' : 'truncate'} ${isDone(todo) ? 'text-white/45 line-through' : 'text-white'}`}
+                className={`flex-1 min-w-0 pl-1 text-sm cursor-text ${titleWrapped ? 'break-words' : 'truncate'} ${isDone(todo) ? 'text-white/45 line-through' : 'text-white'}`}
               >
                 {todo.text || <span className="text-white/40">Untitled</span>}
               </span>
